@@ -17,3 +17,19 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+
+# Installed BMad skills. Restore with: npx bmad-method install --tools cursor
+.agents/
+
+# Generated BMad runtime (regenerated on install). Team customizations stay in git.
+_bmad/*
+!_bmad/config.toml
+!_bmad/custom/
+!_bmad/custom/**
+_bmad/custom/*.user.toml
+
+# BMad planning/build output (initiatives, specs, tickets)
+_bmad-output/
+
+# Loop orchestrator state, if initialized
+.bmad-loop/
