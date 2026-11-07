@@ -1,8 +1,8 @@
-# Project Brief: Daily Newspaper (working title)
+# Project Brief: Matutine
 
 A Kotlin Multiplatform app that assembles a personal "front page" every morning from RSS feeds, a calendar and a task source, with light AI summarization. An optional self-hosted Ktor server adds scheduled generation and sync between devices.
 
-> **Note for the agent:** Read this whole file first, then ask the author clarifying questions. Items marked **[UNVERIFIED]** are assumptions that should be checked before relying on them. The "Open questions" section at the end lists what still needs a decision.
+> **Note for the agent:** Read this whole file first. Items marked **[UNVERIFIED]** are assumptions that should be checked before relying on them. Section 14 has no remaining product decisions.
 
 ---
 
@@ -10,7 +10,7 @@ A Kotlin Multiplatform app that assembles a personal "front page" every morning 
 
 - **Contest:** Kotlin Multiplatform Contest, run by the Kotlin Foundation, tied to KotlinConf. It targets students and recent graduates. Entrants must be 18+.
 - **Round:** KotlinConf 2027 (Kraków, April 22-23, 2027).
-- **Deadline:** December 7, 2026. Winners announced December 21, 2026. (Dates taken from the contest page as of Oct 2026; re-check at https://kotlinconf.com/contest/.)
+- **Deadline:** 23:59 CET on December 7, 2026. Winners are announced December 21, 2026. Confirmed on the contest page and the rules page on 7 November 2026. The author wants implementation finished about five days earlier so one day remains for the demo video. That earlier date is a soft aim, not a scope cutoff. https://kotlinconf.com/contest/
 - **Prize:** Trip to KotlinConf for the top three; souvenirs for other eligible entrants.
 - **Rules that matter:**
   - The project must use Kotlin Multiplatform and run on **at least two platforms**.
@@ -25,7 +25,7 @@ A Kotlin Multiplatform app that assembles a personal "front page" every morning 
 ## 2. Author constraints
 
 - **No Mac, so no iOS build.** Targets are Android, Desktop (JVM), and Web, plus a JVM server. Do not claim iOS support. Optionally, a GitHub Actions macOS runner could verify that the iOS target compiles, but that is out of scope and untestable by the author.
-- **AI must be cheap or free.** No budget for paid credits. Use free-tier keys (e.g. Google Gemini API free tier via AI Studio). OpenRouter free-tier models may also work **[UNVERIFIED: check current availability and limits]**.
+- **AI must be cheap or free.** No budget for paid credits. The MVP default provider is the Google Gemini free tier. The app still runs with no key. The provider interface must also accept other providers later, including OpenRouter's free models, other OpenRouter models, and further providers. OpenRouter's current free-tier limits are **[UNVERIFIED]**.
 - **Time:** about six weeks to the deadline. The author hopes to build much of it faster with coding agents.
 
 ## 3. The idea
@@ -78,22 +78,21 @@ A cross-platform app that delivers a **daily newspaper**: a one-page "front page
 ## 5. Platform-specific features (to show real cross-platform design via `expect/actual`)
 
 - **Android:** read the device calendar (local calendar provider, no OAuth), morning local notification, optional home-screen widget, customization settings.
-- **Desktop:** typewriter-style editor, system tray icon, local file access, PDF export.
-- **Web:** viewing and light editing through the server-hosted interface.
+- **Desktop:** typewriter-style editor. The document written there is kept by the app and included in the edition. System tray icon. PDF export is stretch. Importing a file chosen from disk is out.
+- **Web:** Compose Multiplatform for Web, served by the server. The project already uses Compose Multiplatform 1.12.2. The web target is Kotlin/Wasm and is Beta.
 - Optional later: text-to-speech audio edition.
 
 ## 6. Data sources: avoid OAuth where possible
 
 - **Calendar:** ICS URL import (all platforms) plus Android's local calendar provider.
-- **Tasks:** personal API token (e.g. Todoist) or a local file. Pick one source for the MVP.
+- **Tasks:** any of these may be configured, including more than one: a Todoist personal API token, a task list kept in Matutine, and a CalDAV to-do collection. The author will test CalDAV with Baikal. The generator includes every configured source.
 - **News:** RSS/Atom feeds.
 - **Email:** out of scope.
 
 ## 7. AI approach (light and free)
 
 - **One batched summarization call per edition**, cached locally or on the server. No chatbot.
-- **Provider:** Google Gemini free tier is the primary candidate. A third-party guide put free limits at roughly 5-10 requests per minute depending on the model, which is enough for one daily digest. **[UNVERIFIED: limits change; check AI Studio. Availability varies by country.]**
-- **Optional:** local model via an Ollama-style server as an alternative provider on desktop/homelab (nice to show a swappable backend).
+- **Provider:** The MVP default is the Google Gemini free tier. The summary interface is a port: later adapters may target OpenRouter (free models or a model the user picks) and other providers. A local model via an Ollama-style server stays a later adapter on that same port. Gemini free-tier limits change and vary by country **[UNVERIFIED: check AI Studio before relying on a number]**.
 - **Rules:**
   - **Bring your own key.** Never commit keys to the public repo.
   - **AI is optional.** With no key, fall back to plain headlines or a simple extractive summary so judges can run the app without setup.
@@ -103,7 +102,7 @@ A cross-platform app that delivers a **daily newspaper**: a one-page "front page
 
 Judges must be able to run it quickly. Therefore:
 - Android and Desktop are the two guaranteed targets.
-- Server is trivially runnable: **Docker image and/or a single `java -jar` command.**
+- Server is trivially runnable from a **Docker image**. A `java -jar` launch is later, only if time remains, and must use the same process and config.
 - **Demo mode** with bundled sample feeds and sample calendar data, requiring no keys and no accounts.
 - README is written like a demo script: exact steps from clone to a visible edition on each target, in a few minutes.
 - Consider a hosted or easily runnable web demo.
@@ -125,13 +124,14 @@ Judges must be able to run it quickly. Therefore:
 - Web client served by the server.
 - Typewriter-style editor on desktop.
 - Optional AI summary with non-AI fallback.
-- Docker/`java -jar` packaging, demo mode, README, demo video.
+- Docker image, demo mode, README, demo video. A `java -jar` launch only if time remains.
 
-### Stretch (only if time remains)
+### Stretch (only if the MVP is in good shape during implementation; no time is reserved)
 - Print-ready PDF export.
 - Audio edition (text-to-speech).
 - Android home-screen widget.
-- Ollama/local-model provider.
+- Ollama/local-model provider, on the same summary port as Gemini.
+- `java -jar` server packaging.
 
 ### Out of scope
 - iOS.
@@ -140,6 +140,7 @@ Judges must be able to run it quickly. Therefore:
 - Push notifications.
 - Remote/internet access beyond documentation.
 - Auto-printing hardware integration (Pi/printer).
+- Importing an existing file from disk into the edition.
 
 ## 11. Suggested plan (about 6 weeks; compress if using agents)
 
@@ -154,7 +155,7 @@ Judges must be able to run it quickly. Therefore:
 ## 12. Risks and unknowns
 
 - Server may not count as a "platform"; keep Android + Desktop as the guaranteed pair.
-- Compose for Web stability changes between releases **[UNVERIFIED: check current status]** before committing to it for the web client.
+- Compose Multiplatform for Web is Beta (Kotlin/Wasm). The web client uses it anyway. Stability can still change between releases.
 - Free AI limits and availability may change.
 - Daily-briefing apps already exist; the newspaper metaphor and typewriter editor are the differentiators, so prioritize polish there.
 - Server setup could hurt the judge experience if it is awkward to run.
@@ -172,9 +173,4 @@ The newspaper idea was chosen as the primary direction for feasibility, clear da
 
 ## 14. Open questions for the author
 
-- Final project name?
-- Which task source for the MVP (Todoist token, local file, or something else)?
-- Which AI provider is the default (Gemini free tier vs. another)?
-- Is the web client expected to be Compose for Web, or a simpler server-rendered page?
-- How much of the time budget goes to stretch features (audio, PDF export)?
-- Should the server be Docker-first, plain `java -jar`, or both?
+None. The web client is Compose Multiplatform for Web. Stretch features have no reserved time; they are pulled in only if the MVP is in good shape during implementation.

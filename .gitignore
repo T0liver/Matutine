@@ -28,8 +28,6 @@ _bmad/*
 !_bmad/custom/**
 _bmad/custom/*.user.toml
 
-# BMad planning/build output (initiatives, specs, tickets)
-_bmad-output/
-
-# Loop orchestrator state, if initialized
+# Planning artifacts and sprint status under _bmad-output/ are versioned.
+# Loop orchestrator state stays local.
 .bmad-loop/
