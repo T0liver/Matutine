@@ -1,0 +1,147 @@
+name: Release clients
+
+on:
+  push:
+    branches:
+      - release
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android apk and aab
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'version'))
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build release apk and aab
+        run: ./gradlew :app:androidApp:assembleRelease :app:androidApp:bundleRelease --no-daemon
+
+      - name: Upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: matutine-android-apk
+          path: app/androidApp/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload aab
+        uses: actions/upload-artifact@v4
+        with:
+          name: matutine-android-aab
+          path: app/androidApp/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+  desktop-linux:
+    name: Desktop Linux deb
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'version'))
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release deb
+        run: ./gradlew :app:desktopApp:packageReleaseDeb --no-daemon
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: matutine-desktop-linux-deb
+          path: app/desktopApp/build/compose/binaries/main-release/deb/*.deb
+          if-no-files-found: error
+
+  desktop-windows:
+    name: Desktop Windows msi
+    runs-on: windows-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'version'))
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release msi
+        shell: bash
+        run: ./gradlew :app:desktopApp:packageReleaseMsi --no-daemon
+
+      - name: Upload msi
+        uses: actions/upload-artifact@v4
+        with:
+          name: matutine-desktop-windows-msi
+          path: app/desktopApp/build/compose/binaries/main-release/msi/*.msi
+          if-no-files-found: error
+
+  desktop-macos:
+    name: Desktop macOS dmg
+    runs-on: macos-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'version'))
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build unsigned release dmg
+        run: ./gradlew :app:desktopApp:packageReleaseDmg --no-daemon
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: matutine-desktop-macos-dmg
+          path: app/desktopApp/build/compose/binaries/main-release/dmg/*.dmg
+          if-no-files-found: error

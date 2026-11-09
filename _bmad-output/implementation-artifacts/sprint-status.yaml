@@ -45,8 +45,8 @@ development_status:
   1-7-show-today-s-events-from-ics-and-the-phone-calendar: done
   1-8-show-today-s-events-from-caldav: done
   1-9-keep-today-s-paper-on-the-next-morning-run: done
-  1-10-walk-a-judge-from-clone-to-a-front-page: backlog
-  1-11-publish-the-android-and-desktop-release-artifacts: backlog
+  1-10-walk-a-judge-from-clone-to-a-front-page: done
+  1-11-publish-the-android-and-desktop-release-artifacts: done
   epic-1-retrospective: optional
 
   epic-2: backlog
