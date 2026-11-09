@@ -51,12 +51,21 @@ fun EditionScreen(
     onOpenSettings: () -> Unit,
     showNoTopicLine: Boolean,
     onOpenInterests: () -> Unit,
+    calendarPermissionOff: Boolean = false,
+    onOpenCalendarPermission: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
     when (state) {
         EditionUiState.Loading -> LoadingEdition(modifier)
         is EditionUiState.SampleLoadFailed -> SampleLoadError(onRetrySample, typography, modifier)
+        is EditionUiState.MissingMorning -> EmptyFrontPage(
+            generating = state.generating,
+            notice = state.notice,
+            onOpenSettings = onOpenSettings,
+            typography = typography,
+            modifier = modifier,
+        )
         is EditionUiState.OtherError -> OtherError(state.message, typography, modifier)
         is EditionUiState.Ready -> EditionContent(
             edition = state.edition,
@@ -65,6 +74,8 @@ fun EditionScreen(
             showNoTopicLine = showNoTopicLine,
             onOpenInterests = onOpenInterests,
             onOpenSettings = onOpenSettings,
+            calendarPermissionOff = calendarPermissionOff,
+            onOpenCalendarPermission = onOpenCalendarPermission,
             typography = typography,
             modifier = modifier,
         )
@@ -132,6 +143,46 @@ private fun OtherError(message: String, typography: MatutineEditionTypography, m
 }
 
 @Composable
+private fun EmptyFrontPage(
+    generating: Boolean,
+    notice: String?,
+    onOpenSettings: () -> Unit,
+    typography: MatutineEditionTypography,
+    modifier: Modifier = Modifier,
+) {
+    val scroll = rememberScrollState()
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(NewsprintColors.paper)
+            .safeContentPadding()
+            .verticalScroll(scroll)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        TextButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+        ) {
+            Text(text = "Settings", style = typography.body.copy(color = NewsprintColors.ink))
+        }
+        Masthead(name = "Matutine", dateLine = "", typography = typography)
+        if (generating) {
+            Text(
+                text = EditionCopy.SETTING_TODAYS_EDITION,
+                style = typography.body,
+            )
+        }
+        if (!notice.isNullOrBlank()) {
+            Text(
+                text = notice,
+                style = typography.body.copy(color = NewsprintColors.error),
+            )
+        }
+    }
+}
+
+@Composable
 private fun EditionContent(
     edition: Edition,
     generating: Boolean,
@@ -139,6 +190,8 @@ private fun EditionContent(
     showNoTopicLine: Boolean,
     onOpenInterests: () -> Unit,
     onOpenSettings: () -> Unit,
+    calendarPermissionOff: Boolean,
+    onOpenCalendarPermission: () -> Unit,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -201,12 +254,17 @@ private fun EditionContent(
                 }
             }
             if (wide) {
-                WideEditionBody(edition, typography)
+                WideEditionBody(
+                    edition = edition,
+                    calendarPermissionOff = calendarPermissionOff,
+                    onOpenCalendarPermission = onOpenCalendarPermission,
+                    typography = typography,
+                )
             } else {
                 Spacer(Modifier.height(8.dp))
                 BriefingBlock(edition.briefing, typography)
                 StoryBlock(edition.stories, typography)
-                CalendarBlock(edition.events, typography)
+                CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography)
                 TaskBlock(edition.tasks, typography)
             }
         }
@@ -214,7 +272,12 @@ private fun EditionContent(
 }
 
 @Composable
-private fun WideEditionBody(edition: Edition, typography: MatutineEditionTypography) {
+private fun WideEditionBody(
+    edition: Edition,
+    calendarPermissionOff: Boolean,
+    onOpenCalendarPermission: () -> Unit,
+    typography: MatutineEditionTypography,
+) {
     Spacer(Modifier.height(8.dp))
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -236,7 +299,7 @@ private fun WideEditionBody(edition: Edition, typography: MatutineEditionTypogra
             modifier = Modifier.width(EditionRailWidth),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            CalendarBlock(edition.events, typography)
+            CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography)
             TaskBlock(edition.tasks, typography)
         }
     }
@@ -260,10 +323,12 @@ private fun Masthead(name: String, dateLine: String, typography: MatutineEdition
                 )
             },
         )
-        Text(
-            text = dateLine,
-            style = typography.meta,
-        )
+        if (dateLine.isNotBlank()) {
+            Text(
+                text = dateLine,
+                style = typography.meta,
+            )
+        }
         HorizontalDivider(
             thickness = 1.dp,
             color = NewsprintColors.ink,
@@ -356,9 +421,26 @@ private fun StoryRow(story: EditionStory, typography: MatutineEditionTypography)
 }
 
 @Composable
-private fun CalendarBlock(events: List<EditionEvent>, typography: MatutineEditionTypography) {
+private fun CalendarBlock(
+    events: List<EditionEvent>,
+    calendarPermissionOff: Boolean,
+    onOpenCalendarPermission: () -> Unit,
+    typography: MatutineEditionTypography,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionLabel("Calendar", typography)
+        if (calendarPermissionOff) {
+            TextButton(
+                onClick = onOpenCalendarPermission,
+                modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                colors = ButtonDefaults.textButtonColors(contentColor = NewsprintColors.ink),
+            ) {
+                Text(
+                    text = EditionCopy.CALENDAR_PERMISSION_OFF,
+                    style = typography.body.copy(color = NewsprintColors.ink),
+                )
+            }
+        }
         if (events.isEmpty()) {
             Text(text = EditionCopy.NO_EVENTS, style = typography.body)
         } else {

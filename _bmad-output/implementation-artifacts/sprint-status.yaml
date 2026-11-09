@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-07-2026 19:42
-last_updated: 11-08-2026 14:58
+last_updated: 11-09-2026 23:31
 project: Matutine
 project_key: NOKEY
 tracking_system: file-system
@@ -42,9 +42,9 @@ development_status:
   1-4-build-the-sample-from-bundled-sources: done
   1-5-generate-today-s-edition-from-a-feed: done
   1-6-name-topics-and-change-the-lead: done
-  1-7-show-today-s-events-from-ics-and-the-phone-calendar: backlog
-  1-8-show-today-s-events-from-caldav: backlog
-  1-9-keep-today-s-paper-on-the-next-morning-run: backlog
+  1-7-show-today-s-events-from-ics-and-the-phone-calendar: done
+  1-8-show-today-s-events-from-caldav: done
+  1-9-keep-today-s-paper-on-the-next-morning-run: done
   1-10-walk-a-judge-from-clone-to-a-front-page: backlog
   1-11-publish-the-android-and-desktop-release-artifacts: backlog
   epic-1-retrospective: optional

@@ -1,12 +1,18 @@
 package hu.toliver.matutine.store
 
+import hu.toliver.matutine.edition.CalDavAccount
+import hu.toliver.matutine.edition.CalendarSnapshot
 import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.EditionRole
 import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.SourceList
+import hu.toliver.matutine.edition.decodeCalDavAccount
+import hu.toliver.matutine.edition.decodeCalendarSnapshot
 import hu.toliver.matutine.edition.decodeEdition
 import hu.toliver.matutine.edition.decodeReaderSettings
 import hu.toliver.matutine.edition.decodeSourceList
+import hu.toliver.matutine.edition.encodeCalDavAccount
+import hu.toliver.matutine.edition.encodeCalendarSnapshot
 import hu.toliver.matutine.edition.encodeEdition
 import hu.toliver.matutine.edition.encodeReaderSettings
 import hu.toliver.matutine.edition.encodeSourceList
@@ -53,6 +59,26 @@ actual class FileEditionStore actual constructor(
         dir.mkdirs()
         val file = File(dir, "${edition.dayKey}-morning.json")
         file.writeText(encodeEdition(edition))
+    }
+
+    override fun readCalendarSnapshot(): CalendarSnapshot? {
+        val file = File(root, "calendar-snapshot.json")
+        if (!file.exists()) return null
+        return decodeCalendarSnapshot(file.readText())
+    }
+
+    override fun writeCalendarSnapshot(snapshot: CalendarSnapshot) {
+        File(root, "calendar-snapshot.json").writeText(encodeCalendarSnapshot(snapshot))
+    }
+
+    override fun readCalDavAccount(): CalDavAccount? {
+        val file = File(root, "caldav.json")
+        if (!file.exists()) return null
+        return decodeCalDavAccount(file.readText())
+    }
+
+    override fun writeCalDavAccount(account: CalDavAccount) {
+        File(root, "caldav.json").writeText(encodeCalDavAccount(account))
     }
 }
 

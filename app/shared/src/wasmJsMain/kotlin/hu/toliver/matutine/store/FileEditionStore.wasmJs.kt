@@ -1,5 +1,7 @@
 package hu.toliver.matutine.store
 
+import hu.toliver.matutine.edition.CalDavAccount
+import hu.toliver.matutine.edition.CalendarSnapshot
 import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.SourceList
@@ -18,4 +20,12 @@ actual class FileEditionStore actual constructor(
     override fun loadMorningEdition(dayKey: String): Edition? = null
 
     override fun saveMorningEdition(edition: Edition) = Unit
+
+    override fun readCalendarSnapshot(): CalendarSnapshot? = null
+
+    override fun writeCalendarSnapshot(snapshot: CalendarSnapshot) = Unit
+
+    override fun readCalDavAccount(): CalDavAccount? = null
+
+    override fun writeCalDavAccount(account: CalDavAccount) = Unit
 }

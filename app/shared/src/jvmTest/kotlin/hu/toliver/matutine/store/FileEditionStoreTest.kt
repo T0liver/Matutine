@@ -1,5 +1,8 @@
 package hu.toliver.matutine.store
 
+import hu.toliver.matutine.edition.CalDavAccount
+import hu.toliver.matutine.edition.CalendarOccurrence
+import hu.toliver.matutine.edition.CalendarSnapshot
 import hu.toliver.matutine.edition.LocalEditionRepository
 import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.SourceList
@@ -90,6 +93,32 @@ class FileEditionStoreTest {
     }
 
     @Test
+    fun writeCalDavAccount_storesThePasswordOnlyInCalDavJson() {
+        val dir = Files.createTempDirectory("matutine-caldav").toFile()
+        val store = FileEditionStore(dir.absolutePath)
+        store.writeSourceList(
+            SourceList(
+                id = "sources",
+                revision = 1,
+                feeds = listOf("https://example.com/rss.xml"),
+            ),
+        )
+        store.writeCalDavAccount(
+            CalDavAccount(
+                url = "https://calendar.example/dav/personal/",
+                username = "o",
+                password = "local-secret",
+            ),
+        )
+
+        val accountFile = File(dir, "caldav.json")
+        assertTrue(accountFile.exists())
+        assertEquals("local-secret", store.readCalDavAccount()?.password)
+        assertFalse(File(dir, "sources.json").readText().contains("local-secret"))
+        assertFalse(accountFile.readText().contains("BEGIN:VTODO"))
+    }
+
+    @Test
     fun corruptSourceList_failsLoadAndDoesNotWriteSample() = runBlocking {
         val dir = Files.createTempDirectory("matutine-corrupt").toFile()
         File(dir, "sources.json").writeText("not json")
@@ -100,5 +129,24 @@ class FileEditionStoreTest {
         assertTrue(result.isFailure)
         assertFalse(File(dir, "editions").exists())
         assertEquals("not json", File(dir, "sources.json").readText())
+    }
+
+    @Test
+    fun calendarSnapshot_roundTripsAndIsAbsentUntilWritten() {
+        val dir = Files.createTempDirectory("matutine-snapshot").toFile()
+        val store = FileEditionStore(dir.absolutePath)
+        assertNull(store.readCalendarSnapshot())
+        assertFalse(File(dir, "calendar-snapshot.json").exists())
+
+        val snapshot = CalendarSnapshot(
+            occurrences = listOf(
+                CalendarOccurrence(title = "Planning", startEpochSecond = 1, endEpochSecond = 2),
+            ),
+        )
+        store.writeCalendarSnapshot(snapshot)
+
+        assertEquals(snapshot, store.readCalendarSnapshot())
+        assertTrue(File(dir, "calendar-snapshot.json").exists())
+        assertNull(store.readSourceList())
     }
 }

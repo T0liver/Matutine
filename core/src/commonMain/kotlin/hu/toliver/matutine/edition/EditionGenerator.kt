@@ -8,6 +8,7 @@ object EditionGenerator {
         parsed: List<Result<List<FeedItem>>>,
         existing: Edition?,
         topics: List<String> = emptyList(),
+        events: List<EditionEvent> = emptyList(),
     ): Edition {
         if (parsed.none { it.isSuccess }) {
             error(FEED_DIDNT_LOAD)
@@ -41,7 +42,7 @@ object EditionGenerator {
             isSample = false,
             briefing = extractiveBriefing(items),
             stories = stories,
-            events = emptyList(),
+            events = events,
             tasks = emptyList(),
             sourceNotes = List(failures) { FEED_DIDNT_LOAD },
         )

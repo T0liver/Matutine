@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import hu.toliver.matutine.edition.chromeControlMinHeight
 import hu.toliver.matutine.theme.LocalMatutineEditionTypography
@@ -40,6 +42,18 @@ fun SettingsScreen(
     onFeedUrlChange: (String) -> Unit,
     feedError: String?,
     onSaveFeed: () -> Unit,
+    calendarUrl: String,
+    onCalendarUrlChange: (String) -> Unit,
+    calendarError: String?,
+    onSaveCalendar: () -> Unit,
+    calDavUrl: String,
+    onCalDavUrlChange: (String) -> Unit,
+    calDavUsername: String,
+    onCalDavUsernameChange: (String) -> Unit,
+    calDavPassword: String,
+    onCalDavPasswordChange: (String) -> Unit,
+    calDavError: String?,
+    onSaveCalDav: () -> Unit,
     onOpenInterests: () -> Unit,
     onGenerate: () -> Unit,
     onBack: () -> Unit,
@@ -99,6 +113,88 @@ fun SettingsScreen(
                 )
             }
         }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = controlHeight),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = "Calendar", style = typography.body.copy(color = NewsprintColors.ink))
+            OutlinedTextField(
+                value = calendarUrl,
+                onValueChange = onCalendarUrlChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlHeight),
+                singleLine = true,
+                isError = calendarError != null,
+                textStyle = typography.body,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { onSaveCalendar() }),
+                shape = RoundedCornerShape(4.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = NewsprintColors.ink,
+                    unfocusedBorderColor = NewsprintColors.ink,
+                    focusedContainerColor = NewsprintColors.field,
+                    unfocusedContainerColor = NewsprintColors.field,
+                    cursorColor = NewsprintColors.ink,
+                    focusedTextColor = NewsprintColors.ink,
+                    unfocusedTextColor = NewsprintColors.ink,
+                    errorBorderColor = NewsprintColors.error,
+                    errorCursorColor = NewsprintColors.error,
+                    errorTextColor = NewsprintColors.ink,
+                ),
+            )
+            if (calendarError != null) {
+                Text(
+                    text = calendarError,
+                    style = typography.body.copy(color = NewsprintColors.error),
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = controlHeight),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = "CalDAV", style = typography.body.copy(color = NewsprintColors.ink))
+            Text(text = "URL", style = typography.body.copy(color = NewsprintColors.ink))
+            newsprintField(
+                value = calDavUrl,
+                onValueChange = onCalDavUrlChange,
+                isError = calDavError != null,
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Next,
+            )
+            Text(text = "Username", style = typography.body.copy(color = NewsprintColors.ink))
+            newsprintField(
+                value = calDavUsername,
+                onValueChange = onCalDavUsernameChange,
+                isError = calDavError != null,
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Next,
+            )
+            Text(text = "Password", style = typography.body.copy(color = NewsprintColors.ink))
+            newsprintField(
+                value = calDavPassword,
+                onValueChange = onCalDavPasswordChange,
+                isError = calDavError != null,
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+                onDone = onSaveCalDav,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            if (calDavError != null) {
+                Text(
+                    text = calDavError,
+                    style = typography.body.copy(color = NewsprintColors.error),
+                )
+            }
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -143,4 +239,46 @@ fun SettingsScreen(
             )
         }
     }
+}
+
+@Composable
+private fun newsprintField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    isError: Boolean,
+    keyboardType: KeyboardType,
+    imeAction: ImeAction,
+    onDone: () -> Unit = {},
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+) {
+    val typography = LocalMatutineEditionTypography.current
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = chromeControlMinHeight()),
+        singleLine = true,
+        isError = isError,
+        textStyle = typography.body,
+        visualTransformation = visualTransformation,
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = imeAction,
+        ),
+        keyboardActions = KeyboardActions(onDone = { onDone() }),
+        shape = RoundedCornerShape(4.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = NewsprintColors.ink,
+            unfocusedBorderColor = NewsprintColors.ink,
+            focusedContainerColor = NewsprintColors.field,
+            unfocusedContainerColor = NewsprintColors.field,
+            cursorColor = NewsprintColors.ink,
+            focusedTextColor = NewsprintColors.ink,
+            unfocusedTextColor = NewsprintColors.ink,
+            errorBorderColor = NewsprintColors.error,
+            errorCursorColor = NewsprintColors.error,
+            errorTextColor = NewsprintColors.ink,
+        ),
+    )
 }

@@ -14,6 +14,9 @@ dependencies {
     implementation(project(":app:shared"))
 
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.work.runtime.ktx)
+
+    testImplementation(libs.kotlin.testJunit)
 
     implementation(libs.compose.uiToolingPreview)
     debugImplementation(libs.compose.uiTooling)

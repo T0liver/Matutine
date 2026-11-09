@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (isFinishing) {
-            MatutineActivityHolder.context = null
+            MatutineActivityHolder.context = applicationContext
         }
         super.onDestroy()
     }

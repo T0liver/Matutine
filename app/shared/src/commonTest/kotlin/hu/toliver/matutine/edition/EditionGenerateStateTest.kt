@@ -189,6 +189,199 @@ class EditionGenerateStateTest {
         assertTrue(viewModel.state is EditionUiState.Ready)
     }
 
+    @Test
+    fun failedCalendarSaveStillGeneratesFromTheStoredUrl() {
+        val repository = FakeEditionRepository(
+            sample,
+            initialCalendars = listOf("https://example.com/old.ics"),
+            generate = { finished },
+        )
+        val viewModel = viewModel(repository)
+        viewModel.updateCalendarUrl("https://example.com/closed.ics")
+
+        viewModel.generate()
+
+        val ready = viewModel.state as EditionUiState.Ready
+        assertFalse(ready.generating)
+        assertEquals(finished.id, ready.edition.id)
+        assertEquals(CALENDAR_LINK_DIDNT_OPEN, ready.notice)
+        assertEquals(CALENDAR_LINK_DIDNT_OPEN, viewModel.calendarFieldError)
+        assertEquals(listOf("https://example.com/old.ics"), repository.savedCalendarUrls())
+        assertEquals(1, repository.generateCalls)
+    }
+
+    @Test
+    fun failedCalendarSaveAndFailedGenerateShowsTheFeedSentence() {
+        val repository = FakeEditionRepository(sample, generate = { error(FEED_DIDNT_LOAD) })
+        val viewModel = viewModel(repository)
+        viewModel.updateCalendarUrl("https://example.com/closed.ics")
+
+        viewModel.generate()
+
+        val ready = viewModel.state as EditionUiState.Ready
+        assertEquals(FEED_DIDNT_LOAD, ready.notice)
+        assertEquals(CALENDAR_LINK_DIDNT_OPEN, viewModel.calendarFieldError)
+        assertEquals(emptyList(), repository.savedCalendarUrls())
+    }
+
+    @Test
+    fun saveCalendarFailureKeepsTheTypedUrl() {
+        val repository = FakeEditionRepository(sample)
+        val viewModel = viewModel(repository)
+        viewModel.updateCalendarUrl("https://example.com/closed.ics")
+
+        viewModel.saveCalendar()
+
+        assertEquals("https://example.com/closed.ics", viewModel.calendarUrl)
+        assertEquals(CALENDAR_LINK_DIDNT_OPEN, viewModel.calendarFieldError)
+        assertEquals(emptyList(), repository.savedCalendarUrls())
+        assertEquals(1, repository.saveCalendarCalls)
+    }
+
+    @Test
+    fun saveCalendarSuccessStoresTheTrimmedUrlAndGenerateDoesNotSaveAgain() {
+        val repository = FakeEditionRepository(sample, generate = { finished })
+        repository.saveCalendarSucceeds = true
+        val viewModel = viewModel(repository)
+        viewModel.updateCalendarUrl("  https://example.com/cal.ics  ")
+
+        viewModel.saveCalendar()
+
+        assertEquals("https://example.com/cal.ics", viewModel.calendarUrl)
+        assertEquals(null, viewModel.calendarFieldError)
+        assertEquals(listOf("https://example.com/cal.ics"), repository.savedCalendarUrls())
+        assertEquals(1, repository.saveCalendarCalls)
+
+        viewModel.generate()
+
+        assertEquals(1, repository.saveCalendarCalls)
+        assertEquals(1, repository.generateCalls)
+        assertEquals(null, (viewModel.state as EditionUiState.Ready).notice)
+    }
+
+    @Test
+    fun saveCalDavSuccessClearsThePasswordAndGenerateDoesNotSaveAgain() {
+        val repository = FakeEditionRepository(sample, generate = { finished })
+        repository.saveCalDavSucceeds = true
+        val viewModel = viewModel(repository)
+        viewModel.updateCalDavUrl("  https://calendar.example/dav/personal/  ")
+        viewModel.updateCalDavUsername(" o ")
+        viewModel.updateCalDavPassword("local-secret")
+
+        viewModel.saveCalDav()
+
+        assertEquals("https://calendar.example/dav/personal/", viewModel.calDavUrl)
+        assertEquals("o", viewModel.calDavUsername)
+        assertEquals("", viewModel.calDavPassword)
+        assertEquals(null, viewModel.calDavFieldError)
+        assertEquals("local-secret", repository.savedCalDavPassword)
+        assertEquals(1, repository.saveCalDavCalls)
+
+        viewModel.generate()
+
+        assertEquals(1, repository.saveCalDavCalls)
+        assertEquals(1, repository.generateCalls)
+    }
+
+    @Test
+    fun storedCalendarAndCalDavAppearWithABlankPassword() {
+        val repository = FakeEditionRepository(
+            sample,
+            initialCalendars = listOf("https://example.com/cal.ics"),
+            initialCalDav = CalDavAccount(
+                url = "https://calendar.example/dav/personal/",
+                username = "o",
+                password = "local-secret",
+            ),
+        )
+        val viewModel = viewModel(repository)
+
+        assertEquals("https://example.com/cal.ics", viewModel.calendarUrl)
+        assertEquals("https://calendar.example/dav/personal/", viewModel.calDavUrl)
+        assertEquals("o", viewModel.calDavUsername)
+        assertEquals("", viewModel.calDavPassword)
+    }
+
+    @Test
+    fun missingMorningIsAnEmptyPageAndGenerateFillsIt() {
+        val gate = CompletableDeferred<Edition>()
+        val repository = FakeEditionRepository(
+            finished,
+            missingMorning = true,
+            generate = { gate.await() },
+        )
+        val viewModel = viewModel(repository)
+
+        val empty = viewModel.state as EditionUiState.MissingMorning
+        assertFalse(empty.generating)
+        assertEquals(null, empty.notice)
+        viewModel.generate()
+        viewModel.generate()
+        assertEquals(1, repository.generateCalls)
+
+        val generating = viewModel.state as EditionUiState.MissingMorning
+        assertTrue(generating.generating)
+        assertEquals(null, generating.notice)
+
+        gate.complete(finished)
+
+        val ready = viewModel.state as EditionUiState.Ready
+        assertFalse(ready.generating)
+        assertEquals(finished.id, ready.edition.id)
+        assertEquals(null, ready.notice)
+        assertFalse(ready.edition.stories.isEmpty())
+    }
+
+    @Test
+    fun failedGenerateFromMissingMorningStaysEmptyWithTheFeedSentence() {
+        val repository = FakeEditionRepository(
+            finished,
+            missingMorning = true,
+            generate = { error(FEED_DIDNT_LOAD) },
+        )
+        val viewModel = viewModel(repository)
+
+        viewModel.generate()
+
+        val empty = viewModel.state as EditionUiState.MissingMorning
+        assertFalse(empty.generating)
+        assertEquals(FEED_DIDNT_LOAD, empty.notice)
+        assertEquals(1, repository.generateCalls)
+    }
+
+    @Test
+    fun otherErrorsStillDoNotGenerate() {
+        val repository = FakeEditionRepository(
+            finished,
+            loadError = "Couldn't load the edition.",
+            generate = { finished },
+        )
+        val viewModel = viewModel(repository)
+
+        assertEquals("Couldn't load the edition.", (viewModel.state as EditionUiState.OtherError).message)
+        viewModel.generate()
+        assertEquals(0, repository.generateCalls)
+        assertTrue(viewModel.state is EditionUiState.OtherError)
+    }
+
+    @Test
+    fun failedCalDavSaveStillGenerates() {
+        val repository = FakeEditionRepository(sample, generate = { finished })
+        val viewModel = viewModel(repository)
+        viewModel.updateCalDavUrl("https://calendar.example/dav/personal/")
+        viewModel.updateCalDavUsername("o")
+        viewModel.updateCalDavPassword("local-secret")
+
+        viewModel.generate()
+
+        val ready = viewModel.state as EditionUiState.Ready
+        assertEquals(finished.id, ready.edition.id)
+        assertEquals(CALDAV_DIDNT_LOAD, ready.notice)
+        assertEquals(CALDAV_DIDNT_LOAD, viewModel.calDavFieldError)
+        assertEquals("local-secret", viewModel.calDavPassword)
+        assertEquals(1, repository.generateCalls)
+    }
+
     private fun viewModel(repository: EditionRepository) =
         EditionViewModel(repository, CoroutineScope(Dispatchers.Unconfined))
 }
@@ -196,20 +389,35 @@ class EditionGenerateStateTest {
 private class FakeEditionRepository(
     private val edition: Edition,
     initialFeeds: List<String> = emptyList(),
+    initialCalendars: List<String> = emptyList(),
     initialTopics: List<String> = emptyList(),
+    initialCalDav: CalDavAccount? = null,
     initialSaveSucceeds: Boolean = false,
     private val failSavedFeedUrls: Boolean = false,
     private val failSavedTopics: Boolean = false,
+    private val missingMorning: Boolean = false,
+    private val loadError: String? = null,
     var blockSave: CompletableDeferred<Unit>? = null,
     private val generate: suspend () -> Edition = { edition },
 ) : EditionRepository {
     private val feeds = initialFeeds.toMutableList()
+    private val calendars = initialCalendars.toMutableList()
     private val topics = initialTopics.toMutableList()
+    private val calDavAccount = initialCalDav
     var saveSucceeds: Boolean = initialSaveSucceeds
+    var saveCalendarSucceeds: Boolean = false
+    var saveCalDavSucceeds: Boolean = false
     var generateCalls: Int = 0
     var saveCalls: Int = 0
+    var saveCalendarCalls: Int = 0
+    var saveCalDavCalls: Int = 0
+    var savedCalDavPassword: String = ""
 
-    override suspend fun loadCurrentMorningEdition(): Result<Edition> = Result.success(edition)
+    override suspend fun loadCurrentMorningEdition(): Result<Edition> = when {
+        missingMorning -> Result.failure(IllegalStateException(MORNING_EDITION_NOT_READY))
+        loadError != null -> Result.failure(IllegalStateException(loadError))
+        else -> Result.success(edition)
+    }
 
     override suspend fun retrySample(): Result<Edition> = Result.success(edition)
 
@@ -234,6 +442,25 @@ private class FakeEditionRepository(
         if (!saveSucceeds) return Result.failure(IllegalStateException(FEED_DIDNT_LOAD))
         feeds.clear()
         feeds += url.trim()
+        return Result.success(Unit)
+    }
+
+    override fun savedCalendarUrls(): List<String> = calendars.toList()
+
+    override suspend fun saveCalendarUrl(url: String): Result<Unit> {
+        saveCalendarCalls += 1
+        if (!saveCalendarSucceeds) return Result.failure(IllegalStateException(CALENDAR_LINK_DIDNT_OPEN))
+        calendars.clear()
+        calendars += url.trim()
+        return Result.success(Unit)
+    }
+
+    override fun savedCalDavAccount(): CalDavAccount? = calDavAccount?.copy(password = "")
+
+    override suspend fun saveCalDavAccount(url: String, username: String, password: String): Result<Unit> {
+        saveCalDavCalls += 1
+        if (!saveCalDavSucceeds) return Result.failure(IllegalStateException(CALDAV_DIDNT_LOAD))
+        savedCalDavPassword = password
         return Result.success(Unit)
     }
 

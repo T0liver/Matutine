@@ -1,6 +1,15 @@
 package hu.toliver.matutine.edition
 
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toInstant
+
 const val FEED_DIDNT_LOAD = "That feed didn't load."
+const val CALENDAR_LINK_DIDNT_OPEN = "That calendar link didn't open."
+const val CALDAV_DIDNT_LOAD = "That CalDAV calendar didn't load."
+const val MORNING_EDITION_NOT_READY = "Today's morning edition is not available yet."
 
 data class FeedItem(
     val sourceName: String,
@@ -59,6 +68,134 @@ internal fun parseIcs(calendar: String): List<EditionEvent> {
         if (title.isEmpty()) return@mapNotNull null
         EditionEvent(title = title, timeLabel = formatIcsTime(lineValue(body, "DTSTART").orEmpty()))
     }.toList()
+}
+
+internal fun parseIcsOccurrences(calendar: String, zone: TimeZone): List<CalendarOccurrence> {
+    val unfolded = unfoldIcs(calendar)
+    val eventPattern = Regex("BEGIN:VEVENT([\\s\\S]*?)END:VEVENT", RegexOption.IGNORE_CASE)
+    return eventPattern.findAll(unfolded).mapNotNull { match ->
+        try {
+            val properties = icsProperties(match.groupValues[1])
+            val title = properties.firstOrNull { it.name == "SUMMARY" }?.value?.let(::unescapeIcs)?.trim().orEmpty()
+            if (title.isEmpty()) return@mapNotNull null
+            val startProperty = properties.firstOrNull { it.name == "DTSTART" } ?: return@mapNotNull null
+            val start = parseIcsDateTime(startProperty, zone) ?: return@mapNotNull null
+            val endProperty = properties.firstOrNull { it.name == "DTEND" }
+            val end = endProperty?.let { parseIcsDateTime(it, zone) } ?: start
+            CalendarOccurrence(
+                title = title,
+                startEpochSecond = start.epochSecond,
+                endEpochSecond = end.epochSecond,
+                allDay = start.allDay,
+            )
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }.toList()
+}
+
+internal fun calendarUrlSendsPassword(url: String): Boolean {
+    val rest = url.trim().substringAfter("://", missingDelimiterValue = "")
+    if (rest.isEmpty()) return false
+    val authority = rest.substringBefore('/').substringBefore('?').substringBefore('#')
+    return authority.substringBeforeLast('@').let { userInfo ->
+        authority.contains('@') && userInfo.isNotEmpty()
+    }
+}
+
+private data class IcsProperty(val name: String, val params: String, val value: String)
+
+private data class IcsDateTime(val epochSecond: Long, val allDay: Boolean)
+
+private fun unfoldIcs(calendar: String): String =
+    calendar.replace("\r\n", "\n").replace('\r', '\n').replace(Regex("\n[ \t]"), "")
+
+private fun icsProperties(body: String): List<IcsProperty> =
+    body.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.mapNotNull { line ->
+        val colon = line.indexOf(':')
+        if (colon <= 0) return@mapNotNull null
+        val left = line.substring(0, colon)
+        IcsProperty(
+            name = left.substringBefore(';').uppercase(),
+            params = left.substringAfter(';', ""),
+            value = line.substring(colon + 1).trim(),
+        )
+    }.toList()
+
+private fun parseIcsDateTime(property: IcsProperty, zone: TimeZone): IcsDateTime? {
+    val raw = property.value.trim()
+    val valueType = icsParameter(property.params, "VALUE")
+    val dateOnly = valueType.equals("DATE", ignoreCase = true) ||
+        (valueType == null && !raw.contains('T'))
+    if (dateOnly) {
+        if (raw.length < 8 || !raw.take(8).all { it.isDigit() }) return null
+        val date = LocalDate(
+            raw.substring(0, 4).toInt(),
+            raw.substring(4, 6).toInt(),
+            raw.substring(6, 8).toInt(),
+        )
+        return IcsDateTime(date.atStartOfDayIn(TimeZone.UTC).epochSeconds, allDay = true)
+    }
+    val utc = raw.endsWith("Z", ignoreCase = true)
+    val digits = raw.removeSuffix("Z").removeSuffix("z")
+    val datePart = digits.substringBefore('T')
+    val timePart = digits.substringAfter('T', "")
+    if (datePart.length < 8 || timePart.length < 4) return null
+    if (!datePart.take(8).all { it.isDigit() } || !timePart.take(4).all { it.isDigit() }) return null
+    val hour = timePart.substring(0, 2).toInt()
+    val minute = timePart.substring(2, 4).toInt()
+    val second = if (timePart.length >= 6 && timePart.substring(4, 6).all { it.isDigit() }) {
+        timePart.substring(4, 6).toInt()
+    } else {
+        0
+    }
+    if (hour !in 0..23 || minute !in 0..59 || second !in 0..59) return null
+    val local = LocalDateTime(
+        datePart.substring(0, 4).toInt(),
+        datePart.substring(4, 6).toInt(),
+        datePart.substring(6, 8).toInt(),
+        hour,
+        minute,
+        second,
+    )
+    val eventZone = if (utc) {
+        TimeZone.UTC
+    } else {
+        icsTimeZone(property.params) ?: zone
+    }
+    return IcsDateTime(local.toInstant(eventZone).epochSeconds, allDay = false)
+}
+
+private fun icsParameter(params: String, name: String): String? =
+    params.split(';').firstNotNullOfOrNull { param ->
+        val key = param.substringBefore('=').trim()
+        if (!key.equals(name, ignoreCase = true)) return@firstNotNullOfOrNull null
+        param.substringAfter('=', "").trim().trim('"')
+    }
+
+private fun icsTimeZone(params: String): TimeZone? {
+    val tzid = Regex("""TZID="?([^";]+)"?""", RegexOption.IGNORE_CASE).find(params)?.groupValues?.get(1)?.trim()
+    if (tzid.isNullOrEmpty()) return null
+    return runCatching { TimeZone.of(tzid) }.getOrNull()
+}
+
+private fun unescapeIcs(value: String): String {
+    val out = StringBuilder()
+    var index = 0
+    while (index < value.length) {
+        val current = value[index]
+        if (current == '\\' && index + 1 < value.length) {
+            when (val next = value[index + 1]) {
+                'n', 'N' -> out.append('\n')
+                else -> out.append(next)
+            }
+            index += 2
+        } else {
+            out.append(current)
+            index += 1
+        }
+    }
+    return out.toString()
 }
 
 internal fun formatIcsTime(raw: String): String {

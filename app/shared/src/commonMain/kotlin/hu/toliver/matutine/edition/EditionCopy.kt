@@ -3,6 +3,7 @@ package hu.toliver.matutine.edition
 internal object EditionCopy {
     const val NO_STORIES = "No stories yet."
     const val NO_EVENTS = "No events today."
+    const val CALENDAR_PERMISSION_OFF = "Calendar permission is off."
     const val NO_TASKS = "No tasks yet."
     const val SETTING_TODAYS_EDITION = "Setting today's edition."
     const val WHAT_DO_YOU_WANT_TO_READ_ABOUT = "What do you want to read about?"
