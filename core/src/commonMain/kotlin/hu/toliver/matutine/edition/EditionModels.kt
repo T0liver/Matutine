@@ -49,4 +49,5 @@ data class Edition(
     val stories: List<EditionStory>,
     val events: List<EditionEvent>,
     val tasks: List<EditionTask>,
+    val sourceNotes: List<String> = emptyList(),
 )

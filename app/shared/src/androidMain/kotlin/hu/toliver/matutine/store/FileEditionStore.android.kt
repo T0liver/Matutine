@@ -3,8 +3,14 @@ package hu.toliver.matutine.store
 import android.content.Context
 import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.EditionRole
+import hu.toliver.matutine.edition.ReaderSettings
+import hu.toliver.matutine.edition.SourceList
 import hu.toliver.matutine.edition.decodeEdition
+import hu.toliver.matutine.edition.decodeReaderSettings
+import hu.toliver.matutine.edition.decodeSourceList
 import hu.toliver.matutine.edition.encodeEdition
+import hu.toliver.matutine.edition.encodeReaderSettings
+import hu.toliver.matutine.edition.encodeSourceList
 import java.io.File
 
 actual class FileEditionStore actual constructor(
@@ -16,7 +22,25 @@ actual class FileEditionStore actual constructor(
         root.mkdirs()
     }
 
-    override fun hasSourceList(): Boolean = File(root, "sources.json").exists()
+    override fun readSourceList(): SourceList? {
+        val file = File(root, "sources.json")
+        if (!file.exists()) return null
+        return decodeSourceList(file.readText())
+    }
+
+    override fun writeSourceList(sourceList: SourceList) {
+        File(root, "sources.json").writeText(encodeSourceList(sourceList))
+    }
+
+    override fun readSettings(): ReaderSettings? {
+        val file = File(root, "settings.json")
+        if (!file.exists()) return null
+        return decodeReaderSettings(file.readText())
+    }
+
+    override fun writeSettings(settings: ReaderSettings) {
+        File(root, "settings.json").writeText(encodeReaderSettings(settings))
+    }
 
     override fun loadMorningEdition(dayKey: String): Edition? {
         val file = File(root, "editions/$dayKey-morning.json")

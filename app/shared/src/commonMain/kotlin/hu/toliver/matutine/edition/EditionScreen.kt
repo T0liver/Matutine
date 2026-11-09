@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContentPadding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -46,6 +48,9 @@ import hu.toliver.matutine.theme.NewsprintColors
 fun EditionScreen(
     state: EditionUiState,
     onRetrySample: () -> Unit,
+    onOpenSettings: () -> Unit,
+    showNoTopicLine: Boolean,
+    onOpenInterests: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -53,7 +58,16 @@ fun EditionScreen(
         EditionUiState.Loading -> LoadingEdition(modifier)
         is EditionUiState.SampleLoadFailed -> SampleLoadError(onRetrySample, typography, modifier)
         is EditionUiState.OtherError -> OtherError(state.message, typography, modifier)
-        is EditionUiState.Ready -> EditionContent(state.edition, typography, modifier)
+        is EditionUiState.Ready -> EditionContent(
+            edition = state.edition,
+            generating = state.generating,
+            notice = state.notice,
+            showNoTopicLine = showNoTopicLine,
+            onOpenInterests = onOpenInterests,
+            onOpenSettings = onOpenSettings,
+            typography = typography,
+            modifier = modifier,
+        )
     }
 }
 
@@ -120,6 +134,11 @@ private fun OtherError(message: String, typography: MatutineEditionTypography, m
 @Composable
 private fun EditionContent(
     edition: Edition,
+    generating: Boolean,
+    notice: String?,
+    showNoTopicLine: Boolean,
+    onOpenInterests: () -> Unit,
+    onOpenSettings: () -> Unit,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -139,12 +158,47 @@ private fun EditionContent(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+            ) {
+                Text(text = "Settings", style = typography.body.copy(color = NewsprintColors.ink))
+            }
             Masthead(edition.mastheadName, edition.dateLine, typography)
+            if (generating) {
+                Text(
+                    text = EditionCopy.SETTING_TODAYS_EDITION,
+                    style = typography.body,
+                )
+            }
+            if (!notice.isNullOrBlank()) {
+                Text(
+                    text = notice,
+                    style = typography.body.copy(color = NewsprintColors.error),
+                )
+            }
+            edition.sourceNotes.forEach { note ->
+                Text(
+                    text = note,
+                    style = typography.body.copy(color = NewsprintColors.error),
+                )
+            }
             if (edition.isSample) {
                 Text(
                     text = "SAMPLE EDITION",
                     style = typography.kicker.copy(color = NewsprintColors.accent),
                 )
+            } else if (showNoTopicLine) {
+                TextButton(
+                    onClick = onOpenInterests,
+                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                    colors = ButtonDefaults.textButtonColors(contentColor = NewsprintColors.ink),
+                ) {
+                    Text(
+                        text = EditionCopy.WHAT_DO_YOU_WANT_TO_READ_ABOUT,
+                        style = typography.body.copy(color = NewsprintColors.ink),
+                    )
+                }
             }
             if (wide) {
                 WideEditionBody(edition, typography)
