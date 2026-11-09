@@ -12,6 +12,17 @@ Internal skill for this computer. The Android SDK is `~/Android/Sdk`. The virtua
 
 Check the real screen after an Android UI change. Leave the emulator running when you are done.
 
+## In IntelliJ
+
+When this session is running inside IntelliJ IDEA, the IDE's MCP server is how you reach the emulator. Use it before the shell steps below.
+
+1. Call `get_run_configurations` and choose the Android app configuration.
+2. Call `execute_run_configuration` with that name. IntelliJ starts `Medium_Phone`, builds, installs, and launches Matutine.
+3. To debug, call `xdebug_start_debugger_session` with the same configuration name. Set a breakpoint first.
+4. If those tools are not listed, the IDE is in router mode. Call them through `execute_tool`.
+
+Do not start a second emulator from the shell while that run is active. After the app is in front, a screenshot can still use the `screencap` step below when the IDE tools do not return an image.
+
 ## Setup
 
 Use this SDK's `adb` and `emulator`. A Debian `adb` may be earlier on `PATH`; do not use that one.
