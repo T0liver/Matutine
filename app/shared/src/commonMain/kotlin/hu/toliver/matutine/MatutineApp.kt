@@ -2,6 +2,8 @@ package hu.toliver.matutine
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -11,8 +13,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import hu.toliver.matutine.edition.EditionScreen
+import hu.toliver.matutine.edition.EditionTranscript
 import hu.toliver.matutine.edition.EditionUiState
 import hu.toliver.matutine.edition.EditionViewModel
+import hu.toliver.matutine.edition.TypewriterPane
+import hu.toliver.matutine.edition.showsTypewriter
 import hu.toliver.matutine.edition.LocalEditionRepository
 import hu.toliver.matutine.edition.calendarPermissionIsOff
 import hu.toliver.matutine.edition.openCalendarPermissionSettings
@@ -32,11 +37,22 @@ import hu.toliver.matutine.theme.resolveEditionTheme
 private sealed interface MatutineScreen {
     data object Edition : MatutineScreen
     data object Settings : MatutineScreen
+    data object Typewriter : MatutineScreen
     data class Interests(val returnToSettings: Boolean) : MatutineScreen
 }
 
+class WindowFlush {
+    var saveOpenTypewriter: ((() -> Unit) -> Unit)? = null
+}
+
 @Composable
-fun MatutineApp(dataRoot: String) {
+fun MatutineApp(
+    dataRoot: String,
+    trayOpenRequest: Int = 0,
+    trayGenerateRequest: Int = 0,
+    windowFlush: WindowFlush = WindowFlush(),
+    typewriter: @Composable (TypewriterPane) -> Unit = {},
+) {
     val viewModel = remember(dataRoot) {
         val store = FileEditionStore(dataRoot)
         val repository = LocalEditionRepository(
@@ -49,6 +65,36 @@ fun MatutineApp(dataRoot: String) {
         EditionViewModel(repository)
     }
     var screen by remember { mutableStateOf<MatutineScreen>(MatutineScreen.Edition) }
+    var typewriterDraft by remember { mutableStateOf("") }
+    LaunchedEffect(trayOpenRequest) {
+        if (trayOpenRequest > 0) {
+            if (screen == MatutineScreen.Typewriter) {
+                viewModel.escapeTypewriter(typewriterDraft) { screen = MatutineScreen.Edition }
+            } else {
+                screen = MatutineScreen.Edition
+            }
+        }
+    }
+    LaunchedEffect(trayGenerateRequest) {
+        if (trayGenerateRequest > 0) {
+            if (screen == MatutineScreen.Typewriter) {
+                viewModel.escapeTypewriter(typewriterDraft) {
+                    viewModel.generate()
+                    screen = MatutineScreen.Edition
+                }
+            } else {
+                viewModel.generate()
+                screen = MatutineScreen.Edition
+            }
+        }
+    }
+    SideEffect {
+        windowFlush.saveOpenTypewriter = if (screen == MatutineScreen.Typewriter) {
+            { done -> viewModel.saveTypewriter(typewriterDraft) { done() } }
+        } else {
+            null
+        }
+    }
     val calendarPermissionOff = rememberCalendarPermissionOff()
     val ready = viewModel.state as? EditionUiState.Ready
     val paperSettings = showsAndroidPaperCustomization()
@@ -121,6 +167,25 @@ fun MatutineApp(dataRoot: String) {
                 calendarPermissionOff = calendarPermissionOff,
                 onOpenCalendarPermission = ::openCalendarPermissionSettings,
                 editionLayoutId = viewModel.editionLayout,
+                onOpenTypewriter = if (showsTypewriter() && ready != null) {
+                    {
+                        typewriterDraft = EditionTranscript.render(ready.edition)
+                        screen = MatutineScreen.Typewriter
+                    }
+                } else {
+                    null
+                },
+            )
+            MatutineScreen.Typewriter -> typewriter(
+                TypewriterPane(
+                    text = typewriterDraft,
+                    saved = viewModel.typewriterSaved,
+                    error = viewModel.typewriterError,
+                    onTextChange = { typewriterDraft = it },
+                    onPause = { viewModel.saveTypewriter(it) },
+                    onDiscard = { typewriterDraft = viewModel.discardTypewriter() },
+                    onEscape = { viewModel.escapeTypewriter(typewriterDraft) { screen = MatutineScreen.Edition } },
+                ),
             )
         }
     }

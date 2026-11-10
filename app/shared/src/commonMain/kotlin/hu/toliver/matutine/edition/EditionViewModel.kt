@@ -78,6 +78,14 @@ class EditionViewModel(
     var editionLayout by mutableStateOf(DEFAULT_EDITION_LAYOUT)
         private set
 
+    var typewriterSaved by mutableStateOf(false)
+        private set
+
+    var typewriterError by mutableStateOf<String?>(null)
+        private set
+
+    private var typewriterGeneration = 0
+
     private var feedBaseline: String = ""
     private var calendarBaseline: String = ""
     private var calDavUrlBaseline: String = ""
@@ -314,6 +322,56 @@ class EditionViewModel(
         if (current.generating) return
         val tasks = current.edition.tasks + EditionTask(title = trimmed)
         persistEdition(current.edition.copy(tasks = tasks), current)
+    }
+
+    fun saveTypewriter(text: String, onResult: (Boolean) -> Unit = {}) {
+        val ready = state as? EditionUiState.Ready
+        if (ready == null) {
+            onResult(false)
+            return
+        }
+        val updated = EditionTranscript.apply(ready.edition, text)
+        if (updated == ready.edition) {
+            typewriterError = null
+            onResult(true)
+            return
+        }
+        val generation = ++typewriterGeneration
+        scope.launch {
+            repository.updateMorningEdition(updated)
+                .onSuccess { saved ->
+                    if (generation != typewriterGeneration) {
+                        onResult(false)
+                        return@onSuccess
+                    }
+                    val current = state as? EditionUiState.Ready
+                    if (current != null) state = current.copy(edition = saved)
+                    typewriterError = null
+                    typewriterSaved = true
+                    onResult(true)
+                }
+                .onFailure {
+                    if (generation != typewriterGeneration) {
+                        onResult(false)
+                        return@onFailure
+                    }
+                    typewriterError = EditionTranscript.SAVE_FAILED
+                    onResult(false)
+                }
+        }
+    }
+
+    fun discardTypewriter(): String {
+        typewriterGeneration += 1
+        typewriterError = null
+        val ready = state as? EditionUiState.Ready ?: return ""
+        return EditionTranscript.render(ready.edition)
+    }
+
+    fun escapeTypewriter(text: String, close: () -> Unit) {
+        saveTypewriter(text) { saved ->
+            if (saved) close()
+        }
     }
 
     private fun persistEdition(updated: Edition, previous: EditionUiState.Ready) {

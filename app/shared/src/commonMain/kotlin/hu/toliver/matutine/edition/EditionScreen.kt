@@ -67,6 +67,7 @@ fun EditionScreen(
     calendarPermissionOff: Boolean = false,
     onOpenCalendarPermission: () -> Unit = {},
     editionLayoutId: String = DEFAULT_EDITION_LAYOUT,
+    onOpenTypewriter: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -94,6 +95,7 @@ fun EditionScreen(
             calendarPermissionOff = calendarPermissionOff,
             onOpenCalendarPermission = onOpenCalendarPermission,
             editionLayoutId = editionLayoutId,
+            onOpenTypewriter = onOpenTypewriter,
             typography = typography,
             modifier = modifier,
         )
@@ -214,6 +216,7 @@ private fun EditionContent(
     calendarPermissionOff: Boolean,
     onOpenCalendarPermission: () -> Unit,
     editionLayoutId: String,
+    onOpenTypewriter: (() -> Unit)?,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -233,11 +236,24 @@ private fun EditionContent(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            TextButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                TextButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                ) {
+                    Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                }
+                if (onOpenTypewriter != null) {
+                    TextButton(
+                        onClick = onOpenTypewriter,
+                        modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                    ) {
+                        Text(text = "Typewriter", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                    }
+                }
             }
             Masthead(edition.mastheadName, edition.dateLine, typography)
             if (generating) {

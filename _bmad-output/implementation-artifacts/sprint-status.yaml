@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-07-2026 19:42
-last_updated: 11-10-2026 07:45
+last_updated: 11-10-2026 08:37
 project: Matutine
 project_key: NOKEY
 tracking_system: file-system
@@ -53,8 +53,8 @@ development_status:
   2-1-check-and-add-a-task-on-the-front-page: done
   2-2-open-the-paper-from-a-local-notification: done
   2-3-customize-the-android-paper: done
-  2-4-use-the-desktop-tray: backlog
-  2-5-rewrite-the-edition-on-the-typewriter: backlog
+  2-4-use-the-desktop-tray: done
+  2-5-rewrite-the-edition-on-the-typewriter: done
   2-6-regenerate-without-losing-the-edits: backlog
   2-7-write-the-briefing-with-a-gemini-key: backlog
   epic-2-retrospective: optional
