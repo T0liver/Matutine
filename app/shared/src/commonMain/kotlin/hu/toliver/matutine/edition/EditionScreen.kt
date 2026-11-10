@@ -72,6 +72,7 @@ fun EditionScreen(
     onNewEditionNow: () -> Unit = {},
     onOpenExtra: (String) -> Unit = {},
     onOpenMorning: () -> Unit = {},
+    readOnly: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -82,6 +83,7 @@ fun EditionScreen(
             generating = state.generating,
             notice = state.notice,
             onOpenSettings = onOpenSettings,
+            readOnly = readOnly,
             typography = typography,
             modifier = modifier,
         )
@@ -104,6 +106,7 @@ fun EditionScreen(
             onNewEditionNow = onNewEditionNow,
             onOpenExtra = onOpenExtra,
             onOpenMorning = onOpenMorning,
+            readOnly = readOnly,
             typography = typography,
             modifier = modifier,
         )
@@ -175,6 +178,7 @@ private fun EmptyFrontPage(
     generating: Boolean,
     notice: String?,
     onOpenSettings: () -> Unit,
+    readOnly: Boolean,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -188,11 +192,13 @@ private fun EmptyFrontPage(
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        TextButton(
-            onClick = onOpenSettings,
-            modifier = Modifier.heightIn(min = chromeControlMinHeight()),
-        ) {
-            Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
+        if (!readOnly) {
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+            ) {
+                Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
+            }
         }
         Masthead(name = "Matutine", dateLine = "", typography = typography)
         if (generating) {
@@ -229,6 +235,7 @@ private fun EditionContent(
     onNewEditionNow: () -> Unit,
     onOpenExtra: (String) -> Unit,
     onOpenMorning: () -> Unit,
+    readOnly: Boolean,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -248,29 +255,31 @@ private fun EditionContent(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+            if (!readOnly) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
-                }
-                if (onOpenTypewriter != null) {
                     TextButton(
-                        onClick = onOpenTypewriter,
+                        onClick = onOpenSettings,
                         modifier = Modifier.heightIn(min = chromeControlMinHeight()),
                     ) {
-                        Text(text = "Typewriter", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                        Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
                     }
-                }
-                TextButton(
-                    onClick = onNewEditionNow,
-                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
-                ) {
-                    Text(text = "New edition now", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                    if (onOpenTypewriter != null) {
+                        TextButton(
+                            onClick = onOpenTypewriter,
+                            modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                        ) {
+                            Text(text = "Typewriter", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                        }
+                    }
+                    TextButton(
+                        onClick = onNewEditionNow,
+                        modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                    ) {
+                        Text(text = "New edition now", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                    }
                 }
             }
             if (edition.role == EditionRole.extra) {
@@ -316,10 +325,10 @@ private fun EditionContent(
             }
             if (edition.isSample) {
                 Text(
-                    text = "SAMPLE EDITION",
+                    text = EditionTranscript.SAMPLE,
                     style = typography.kicker.copy(color = EditionThemeColors.current.accent),
                 )
-            } else if (showNoTopicLine) {
+            } else if (showNoTopicLine && !readOnly) {
                 TextButton(
                     onClick = onOpenInterests,
                     modifier = Modifier.heightIn(min = chromeControlMinHeight()),
@@ -339,6 +348,7 @@ private fun EditionContent(
                     onAddTask = onAddTask,
                     calendarPermissionOff = calendarPermissionOff,
                     onOpenCalendarPermission = onOpenCalendarPermission,
+                    readOnly = readOnly,
                     typography = typography,
                 )
             } else {
@@ -351,6 +361,7 @@ private fun EditionContent(
                     taskSaved = taskSaved,
                     onToggleTask = onToggleTask,
                     onAddTask = onAddTask,
+                    readOnly = readOnly,
                     typography = typography,
                 )
             }
@@ -366,6 +377,7 @@ private fun WideEditionBody(
     onAddTask: (String) -> Unit,
     calendarPermissionOff: Boolean,
     onOpenCalendarPermission: () -> Unit,
+    readOnly: Boolean,
     typography: MatutineEditionTypography,
 ) {
     Spacer(Modifier.height(8.dp))
@@ -395,6 +407,7 @@ private fun WideEditionBody(
                 taskSaved = taskSaved,
                 onToggleTask = onToggleTask,
                 onAddTask = onAddTask,
+                readOnly = readOnly,
                 typography = typography,
             )
         }
@@ -562,6 +575,7 @@ private fun TaskBlock(
     taskSaved: Boolean,
     onToggleTask: (Int) -> Unit,
     onAddTask: (String) -> Unit,
+    readOnly: Boolean,
     typography: MatutineEditionTypography,
 ) {
     var draft by remember { mutableStateOf("") }
@@ -571,18 +585,25 @@ private fun TaskBlock(
             Text(text = EditionCopy.NO_TASKS, style = typography.body)
         } else {
             tasks.forEachIndexed { index, task ->
-                TaskRow(task, typography, onToggle = { onToggleTask(index) })
+                TaskRow(
+                    task,
+                    typography,
+                    onToggle = { onToggleTask(index) },
+                    readOnly = readOnly,
+                )
             }
         }
-        TaskAddLine(
-            value = draft,
-            onValueChange = { draft = it },
-            onConfirm = {
-                onAddTask(draft)
-                draft = ""
-            },
-            typography = typography,
-        )
+        if (!readOnly) {
+            TaskAddLine(
+                value = draft,
+                onValueChange = { draft = it },
+                onConfirm = {
+                    onAddTask(draft)
+                    draft = ""
+                },
+                typography = typography,
+            )
+        }
         if (taskSaved) {
             Text(text = EditionCopy.SAVED, style = typography.meta)
         }
@@ -624,6 +645,7 @@ private fun TaskRow(
     task: EditionTask,
     typography: MatutineEditionTypography,
     onToggle: () -> Unit,
+    readOnly: Boolean,
 ) {
     val touchTarget = if (editionForceSingleColumn()) {
         Modifier.minimumInteractiveComponentSize()
@@ -636,10 +658,16 @@ private fun TaskRow(
         modifier = Modifier
             .padding(vertical = 4.dp)
             .then(touchTarget)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onToggle,
+            .then(
+                if (readOnly) {
+                    Modifier
+                } else {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onToggle,
+                    )
+                },
             ),
     ) {
         Box(

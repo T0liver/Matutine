@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-07-2026 19:42
-last_updated: 11-10-2026 18:48
+last_updated: 11-10-2026 19:55
 project: Matutine
 project_key: NOKEY
 tracking_system: file-system
@@ -59,9 +59,9 @@ development_status:
   2-7-write-the-briefing-with-a-gemini-key: done
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-open-the-server-s-paper-in-the-browser: backlog
-  3-2-generate-the-morning-edition-on-the-server-clock: backlog
+  epic-3: in-progress
+  3-1-open-the-server-s-paper-in-the-browser: done
+  3-2-generate-the-morning-edition-on-the-server-clock: done
   3-3-configure-the-server-in-admin: backlog
   3-4-light-edit-a-block-in-the-browser: backlog
   3-5-read-the-server-edition-on-android: backlog

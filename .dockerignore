@@ -1,0 +1,9 @@
+.git
+.gradle
+**/.gradle
+**/build
+.idea
+_bmad
+_bmad-output
+*.md
+!README.md
