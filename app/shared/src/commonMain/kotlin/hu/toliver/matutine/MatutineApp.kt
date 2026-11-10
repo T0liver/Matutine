@@ -23,8 +23,11 @@ import hu.toliver.matutine.edition.showsNoTopicLine
 import hu.toliver.matutine.edition.writesDeviceCalendarSnapshot
 import hu.toliver.matutine.settings.InterestsScreen
 import hu.toliver.matutine.settings.SettingsScreen
+import hu.toliver.matutine.settings.showsAndroidPaperCustomization
+import hu.toliver.matutine.settings.showsNotificationTimeRow
 import hu.toliver.matutine.store.FileEditionStore
 import hu.toliver.matutine.theme.MatutineTheme
+import hu.toliver.matutine.theme.resolveEditionTheme
 
 private sealed interface MatutineScreen {
     data object Edition : MatutineScreen
@@ -48,7 +51,8 @@ fun MatutineApp(dataRoot: String) {
     var screen by remember { mutableStateOf<MatutineScreen>(MatutineScreen.Edition) }
     val calendarPermissionOff = rememberCalendarPermissionOff()
     val ready = viewModel.state as? EditionUiState.Ready
-    MatutineTheme {
+    val paperSettings = showsAndroidPaperCustomization()
+    MatutineTheme(editionColors = resolveEditionTheme(viewModel.editionTheme)) {
         when (val current = screen) {
             MatutineScreen.Settings -> SettingsScreen(
                 feedUrl = viewModel.feedUrl,
@@ -73,6 +77,17 @@ fun MatutineApp(dataRoot: String) {
                     screen = MatutineScreen.Edition
                 },
                 onBack = { screen = MatutineScreen.Edition },
+                notificationTime = if (showsNotificationTimeRow()) viewModel.notificationTime else null,
+                onNotificationTimeChange = if (showsNotificationTimeRow()) viewModel::updateNotificationTime else null,
+                notificationTimeError = if (showsNotificationTimeRow()) viewModel.notificationTimeError else null,
+                onSaveNotificationTime = if (showsNotificationTimeRow()) viewModel::saveNotificationTime else null,
+                notificationBody = if (paperSettings) viewModel.notificationBody else null,
+                onNotificationBodyChange = if (paperSettings) viewModel::updateNotificationBody else null,
+                onSaveNotificationBody = if (paperSettings) viewModel::saveNotificationBody else null,
+                editionThemeId = if (paperSettings) viewModel.editionTheme else null,
+                onEditionThemeSelect = if (paperSettings) viewModel::saveEditionTheme else null,
+                editionLayoutId = if (paperSettings) viewModel.editionLayout else null,
+                onEditionLayoutSelect = if (paperSettings) viewModel::saveEditionLayout else null,
             )
             is MatutineScreen.Interests -> InterestsScreen(
                 topics = viewModel.topics,
@@ -101,8 +116,11 @@ fun MatutineApp(dataRoot: String) {
                     showsNoTopicLine(it.edition.isSample, viewModel.topics)
                 } == true,
                 onOpenInterests = { screen = MatutineScreen.Interests(returnToSettings = false) },
+                onToggleTask = viewModel::toggleTask,
+                onAddTask = viewModel::addTask,
                 calendarPermissionOff = calendarPermissionOff,
                 onOpenCalendarPermission = ::openCalendarPermissionSettings,
+                editionLayoutId = viewModel.editionLayout,
             )
         }
     }

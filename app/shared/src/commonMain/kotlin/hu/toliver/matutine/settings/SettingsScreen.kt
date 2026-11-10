@@ -32,6 +32,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import hu.toliver.matutine.edition.EDITION_LAYOUT_OPTIONS
+import hu.toliver.matutine.edition.EDITION_THEME_OPTIONS
 import hu.toliver.matutine.edition.chromeControlMinHeight
 import hu.toliver.matutine.theme.LocalMatutineEditionTypography
 import hu.toliver.matutine.theme.NewsprintColors
@@ -57,6 +59,17 @@ fun SettingsScreen(
     onOpenInterests: () -> Unit,
     onGenerate: () -> Unit,
     onBack: () -> Unit,
+    notificationTime: String? = null,
+    onNotificationTimeChange: ((String) -> Unit)? = null,
+    notificationTimeError: String? = null,
+    onSaveNotificationTime: (() -> Unit)? = null,
+    notificationBody: String? = null,
+    onNotificationBodyChange: ((String) -> Unit)? = null,
+    onSaveNotificationBody: (() -> Unit)? = null,
+    editionThemeId: String? = null,
+    onEditionThemeSelect: ((String) -> Unit)? = null,
+    editionLayoutId: String? = null,
+    onEditionLayoutSelect: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -195,6 +208,103 @@ fun SettingsScreen(
                 )
             }
         }
+        if (notificationTime != null && onNotificationTimeChange != null && onSaveNotificationTime != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlHeight),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(text = "Notification time", style = typography.body.copy(color = NewsprintColors.ink))
+                OutlinedTextField(
+                    value = notificationTime,
+                    onValueChange = onNotificationTimeChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = controlHeight),
+                    singleLine = true,
+                    isError = notificationTimeError != null,
+                    textStyle = typography.body,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { onSaveNotificationTime() }),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NewsprintColors.ink,
+                        unfocusedBorderColor = NewsprintColors.ink,
+                        focusedContainerColor = NewsprintColors.field,
+                        unfocusedContainerColor = NewsprintColors.field,
+                        cursorColor = NewsprintColors.ink,
+                        focusedTextColor = NewsprintColors.ink,
+                        unfocusedTextColor = NewsprintColors.ink,
+                        errorBorderColor = NewsprintColors.error,
+                        errorCursorColor = NewsprintColors.error,
+                        errorTextColor = NewsprintColors.ink,
+                    ),
+                )
+                if (notificationTimeError != null) {
+                    Text(
+                        text = notificationTimeError,
+                        style = typography.body.copy(color = NewsprintColors.error),
+                    )
+                }
+            }
+        }
+        if (notificationBody != null && onNotificationBodyChange != null && onSaveNotificationBody != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlHeight),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(text = "Notification text", style = typography.body.copy(color = NewsprintColors.ink))
+                OutlinedTextField(
+                    value = notificationBody,
+                    onValueChange = onNotificationBodyChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = controlHeight),
+                    singleLine = false,
+                    maxLines = 3,
+                    textStyle = typography.body,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { onSaveNotificationBody() }),
+                    shape = RoundedCornerShape(4.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NewsprintColors.ink,
+                        unfocusedBorderColor = NewsprintColors.ink,
+                        focusedContainerColor = NewsprintColors.field,
+                        unfocusedContainerColor = NewsprintColors.field,
+                        cursorColor = NewsprintColors.ink,
+                        focusedTextColor = NewsprintColors.ink,
+                        unfocusedTextColor = NewsprintColors.ink,
+                    ),
+                )
+            }
+        }
+        if (editionThemeId != null && onEditionThemeSelect != null) {
+            PreferencePicker(
+                label = "Theme",
+                options = EDITION_THEME_OPTIONS,
+                selectedId = editionThemeId,
+                onSelect = onEditionThemeSelect,
+                controlHeight = controlHeight,
+            )
+        }
+        if (editionLayoutId != null && onEditionLayoutSelect != null) {
+            PreferencePicker(
+                label = "Layout",
+                options = EDITION_LAYOUT_OPTIONS,
+                selectedId = editionLayoutId,
+                onSelect = onEditionLayoutSelect,
+                controlHeight = controlHeight,
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -237,6 +347,40 @@ fun SettingsScreen(
                 text = "Return to the edition",
                 style = typography.body.copy(color = NewsprintColors.ink),
             )
+        }
+    }
+}
+
+@Composable
+private fun PreferencePicker(
+    label: String,
+    options: List<Pair<String, String>>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    controlHeight: androidx.compose.ui.unit.Dp,
+) {
+    val editionTypography = LocalMatutineEditionTypography.current
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(text = label, style = editionTypography.body.copy(color = NewsprintColors.ink))
+        options.forEach { (id, title) ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlHeight)
+                    .clickable(role = Role.RadioButton, onClick = { onSelect(id) }),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(text = title, style = editionTypography.body.copy(color = NewsprintColors.ink))
+                Text(
+                    text = if (id == selectedId) "Selected" else "",
+                    style = editionTypography.meta.copy(color = NewsprintColors.inkSecondary),
+                )
+            }
+            HorizontalDivider(thickness = 1.dp, color = NewsprintColors.rule)
         }
     }
 }

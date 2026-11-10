@@ -73,12 +73,63 @@ class LocalEditionRepository(
 
     override fun savedTopics(): List<String> = store.readSettings()?.topics.orEmpty()
 
+    override fun savedNotificationTime(): String =
+        store.readSettings()?.resolvedNotificationTime() ?: DEFAULT_NOTIFICATION_TIME
+
+    override fun savedNotificationBody(): String =
+        store.readSettings()?.resolvedNotificationBody() ?: EDITION_READY_NOTIFICATION_BODY
+
+    override fun savedEditionTheme(): String =
+        store.readSettings()?.resolvedEditionTheme() ?: DEFAULT_EDITION_THEME
+
+    override fun savedEditionLayout(): String =
+        store.readSettings()?.resolvedEditionLayout() ?: DEFAULT_EDITION_LAYOUT
+
     override fun saveTopics(topics: List<String>) {
+        val current = store.readSettings() ?: ReaderSettings()
         store.writeSettings(
-            ReaderSettings(
+            current.copy(
                 topics = topics.map { it.trim() }.filter { it.isNotEmpty() },
             ),
         )
+    }
+
+    override fun saveNotificationTime(time: String): Result<Unit> = runCatching {
+        val trimmed = time.trim()
+        val parsed = parseNotificationTime(trimmed) ?: error("invalid_notification_time")
+        val normalized = notificationTimeLabel(parsed.first, parsed.second)
+        val current = store.readSettings() ?: ReaderSettings()
+        if (current.notificationTime == normalized) {
+            return@runCatching
+        }
+        store.writeSettings(current.copy(notificationTime = normalized))
+    }
+
+    override fun saveNotificationBody(body: String): Result<Unit> = runCatching {
+        val normalized = body.trim().ifEmpty { EDITION_READY_NOTIFICATION_BODY }
+        val current = store.readSettings() ?: ReaderSettings()
+        if (current.resolvedNotificationBody() == normalized) {
+            return@runCatching
+        }
+        store.writeSettings(current.copy(notificationBody = normalized))
+    }
+
+    override fun saveEditionTheme(themeId: String): Result<Unit> = runCatching {
+        val normalized = normalizeEditionThemeId(themeId) ?: error("invalid_edition_theme")
+        val current = store.readSettings() ?: ReaderSettings()
+        if (current.resolvedEditionTheme() == normalized) {
+            return@runCatching
+        }
+        store.writeSettings(current.copy(editionTheme = normalized))
+    }
+
+    override fun saveEditionLayout(layoutId: String): Result<Unit> = runCatching {
+        val normalized = normalizeEditionLayoutId(layoutId) ?: error("invalid_edition_layout")
+        val current = store.readSettings() ?: ReaderSettings()
+        if (current.resolvedEditionLayout() == normalized) {
+            return@runCatching
+        }
+        store.writeSettings(current.copy(editionLayout = normalized))
     }
 
     override suspend fun saveFeedUrl(url: String): Result<Unit> = runCatching {
@@ -160,6 +211,16 @@ class LocalEditionRepository(
 
     override suspend fun generateToday(): Result<Edition> = runCatching {
         writeGeneratedToday(today(), replaceExisting = true)
+    }
+
+    override suspend fun updateMorningEdition(edition: Edition): Result<Edition> = runCatching {
+        val dayKey = today().toDayKey()
+        require(edition.dayKey == dayKey && edition.role == EditionRole.morning)
+        val stored = store.loadMorningEdition(dayKey) ?: error(MORNING_EDITION_NOT_READY)
+        require(stored.id == edition.id)
+        val next = edition.copy(revision = stored.revision + 1)
+        store.saveMorningEdition(next)
+        next
     }
 
     private suspend fun writeGeneratedToday(date: LocalDate, replaceExisting: Boolean): Edition {
@@ -283,5 +344,14 @@ interface EditionRepository {
     suspend fun saveCalDavAccount(url: String, username: String, password: String): Result<Unit>
     fun savedTopics(): List<String>
     fun saveTopics(topics: List<String>)
+    fun savedNotificationTime(): String
+    fun saveNotificationTime(time: String): Result<Unit>
+    fun savedNotificationBody(): String
+    fun saveNotificationBody(body: String): Result<Unit>
+    fun savedEditionTheme(): String
+    fun saveEditionTheme(themeId: String): Result<Unit>
+    fun savedEditionLayout(): String
+    fun saveEditionLayout(layoutId: String): Result<Unit>
     suspend fun generateToday(): Result<Edition>
+    suspend fun updateMorningEdition(edition: Edition): Result<Edition>
 }

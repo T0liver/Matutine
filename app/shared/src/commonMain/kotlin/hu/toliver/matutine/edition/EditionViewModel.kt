@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import hu.toliver.matutine.settings.onNotificationTimeSaved
 import kotlinx.coroutines.launch
 
 sealed interface EditionUiState {
@@ -15,6 +16,7 @@ sealed interface EditionUiState {
         val edition: Edition,
         val generating: Boolean = false,
         val notice: String? = null,
+        val taskSaved: Boolean = false,
     ) : EditionUiState
 
     data class SampleLoadFailed(val message: String = "The sample edition didn't load.") : EditionUiState
@@ -61,10 +63,27 @@ class EditionViewModel(
     var topics by mutableStateOf<List<String>>(emptyList())
         private set
 
+    var notificationTime by mutableStateOf(DEFAULT_NOTIFICATION_TIME)
+        private set
+
+    var notificationTimeError by mutableStateOf<String?>(null)
+        private set
+
+    var notificationBody by mutableStateOf(EDITION_READY_NOTIFICATION_BODY)
+        private set
+
+    var editionTheme by mutableStateOf(DEFAULT_EDITION_THEME)
+        private set
+
+    var editionLayout by mutableStateOf(DEFAULT_EDITION_LAYOUT)
+        private set
+
     private var feedBaseline: String = ""
     private var calendarBaseline: String = ""
     private var calDavUrlBaseline: String = ""
     private var calDavUsernameBaseline: String = ""
+    private var notificationTimeBaseline: String = DEFAULT_NOTIFICATION_TIME
+    private var notificationBodyBaseline: String = EDITION_READY_NOTIFICATION_BODY
 
     init {
         feedBaseline = runCatching { repository.savedFeedUrls().singleOrNull().orEmpty() }.getOrDefault("")
@@ -77,7 +96,55 @@ class EditionViewModel(
         calDavUrl = calDavUrlBaseline
         calDavUsername = calDavUsernameBaseline
         topics = runCatching { repository.savedTopics() }.getOrDefault(emptyList())
+        notificationTimeBaseline = runCatching { repository.savedNotificationTime() }.getOrDefault(DEFAULT_NOTIFICATION_TIME)
+        notificationTime = notificationTimeBaseline
+        notificationBodyBaseline = runCatching { repository.savedNotificationBody() }.getOrDefault(EDITION_READY_NOTIFICATION_BODY)
+        notificationBody = notificationBodyBaseline
+        editionTheme = runCatching { repository.savedEditionTheme() }.getOrDefault(DEFAULT_EDITION_THEME)
+        editionLayout = runCatching { repository.savedEditionLayout() }.getOrDefault(DEFAULT_EDITION_LAYOUT)
         load()
+    }
+
+    fun updateNotificationTime(value: String) {
+        if (value != notificationTime) notificationTimeError = null
+        notificationTime = value
+    }
+
+    fun saveNotificationTime() {
+        val typed = notificationTime
+        repository.saveNotificationTime(typed)
+            .onSuccess {
+                notificationTimeBaseline = repository.savedNotificationTime()
+                if (notificationTime == typed) notificationTime = notificationTimeBaseline
+                notificationTimeError = null
+                onNotificationTimeSaved()
+            }
+            .onFailure {
+                if (notificationTime == typed) notificationTimeError = "Use a time like 07:00."
+            }
+    }
+
+    fun updateNotificationBody(value: String) {
+        notificationBody = value
+    }
+
+    fun saveNotificationBody() {
+        val typed = notificationBody
+        repository.saveNotificationBody(typed)
+            .onSuccess {
+                notificationBodyBaseline = repository.savedNotificationBody()
+                if (notificationBody == typed) notificationBody = notificationBodyBaseline
+            }
+    }
+
+    fun saveEditionTheme(themeId: String) {
+        repository.saveEditionTheme(themeId)
+            .onSuccess { editionTheme = repository.savedEditionTheme() }
+    }
+
+    fun saveEditionLayout(layoutId: String) {
+        repository.saveEditionLayout(layoutId)
+            .onSuccess { editionLayout = repository.savedEditionLayout() }
     }
 
     fun updateFeedUrl(value: String) {
@@ -227,6 +294,45 @@ class EditionViewModel(
             repository.retrySample()
                 .onSuccess { edition -> state = EditionUiState.Ready(edition) }
                 .onFailure { state = EditionUiState.SampleLoadFailed() }
+        }
+    }
+
+    fun toggleTask(index: Int) {
+        val current = state as? EditionUiState.Ready ?: return
+        if (current.generating) return
+        val tasks = current.edition.tasks.toMutableList()
+        if (index !in tasks.indices) return
+        val task = tasks[index]
+        tasks[index] = task.copy(completed = !task.completed)
+        persistEdition(current.edition.copy(tasks = tasks), current)
+    }
+
+    fun addTask(title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        val current = state as? EditionUiState.Ready ?: return
+        if (current.generating) return
+        val tasks = current.edition.tasks + EditionTask(title = trimmed)
+        persistEdition(current.edition.copy(tasks = tasks), current)
+    }
+
+    private fun persistEdition(updated: Edition, previous: EditionUiState.Ready) {
+        state = previous.copy(edition = updated)
+        val rollback = previous
+        scope.launch {
+            repository.updateMorningEdition(updated)
+                .onSuccess { saved ->
+                    val current = state as? EditionUiState.Ready
+                    if (current != null && current.edition.tasks == updated.tasks) {
+                        state = current.copy(edition = saved, taskSaved = true)
+                    }
+                }
+                .onFailure {
+                    val current = state as? EditionUiState.Ready
+                    if (current != null && current.edition.tasks == updated.tasks) {
+                        state = rollback
+                    }
+                }
         }
     }
 

@@ -12,6 +12,14 @@ val EditionRailWidth: Dp = 280.dp
 fun usesWideEditionLayout(contentWidth: Dp, forceSingleColumn: Boolean): Boolean =
     !forceSingleColumn && contentWidth >= EditionWideLayoutMinWidth
 
+fun editionForceSingleColumnForLayout(layoutId: String): Boolean {
+    val resolved = layoutId.trim().lowercase()
+    return when (resolved) {
+        DEFAULT_EDITION_LAYOUT -> editionForceSingleColumn()
+        else -> editionForceSingleColumn()
+    }
+}
+
 /** Split ranked stories for a two-column broadsheet: read down the left column, then the right. */
 fun storiesForTwoColumns(stories: List<EditionStory>): Pair<List<EditionStory>, List<EditionStory>> {
     if (stories.isEmpty()) return emptyList<EditionStory>() to emptyList()

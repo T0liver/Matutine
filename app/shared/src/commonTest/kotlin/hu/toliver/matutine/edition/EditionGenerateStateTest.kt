@@ -436,6 +436,22 @@ private class FakeEditionRepository(
         this.topics += topics
     }
 
+    override fun savedNotificationTime(): String = DEFAULT_NOTIFICATION_TIME
+
+    override fun saveNotificationTime(time: String): Result<Unit> = Result.success(Unit)
+
+    override fun savedNotificationBody(): String = EDITION_READY_NOTIFICATION_BODY
+
+    override fun saveNotificationBody(body: String): Result<Unit> = Result.success(Unit)
+
+    override fun savedEditionTheme(): String = DEFAULT_EDITION_THEME
+
+    override fun saveEditionTheme(themeId: String): Result<Unit> = Result.success(Unit)
+
+    override fun savedEditionLayout(): String = DEFAULT_EDITION_LAYOUT
+
+    override fun saveEditionLayout(layoutId: String): Result<Unit> = Result.success(Unit)
+
     override suspend fun saveFeedUrl(url: String): Result<Unit> {
         saveCalls += 1
         blockSave?.await()
@@ -468,4 +484,6 @@ private class FakeEditionRepository(
         generateCalls += 1
         return runCatching { generate() }
     }
+
+    override suspend fun updateMorningEdition(edition: Edition): Result<Edition> = Result.success(edition)
 }

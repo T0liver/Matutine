@@ -14,26 +14,28 @@ val LocalMatutineEditionTypography = staticCompositionLocalOf<MatutineEditionTyp
 
 @Composable
 fun MatutineTheme(
+    editionColors: MatutineEditionColors = MatutineEditionColors.newsprint(),
     content: @Composable () -> Unit,
 ) {
     val editionTypography = rememberMatutineEditionTypography(compactMasthead = true)
     val colorScheme = lightColorScheme(
-        primary = NewsprintColors.accent,
-        onPrimary = NewsprintColors.paper,
-        secondary = NewsprintColors.inkSecondary,
-        onSecondary = NewsprintColors.paper,
-        background = NewsprintColors.paper,
-        onBackground = NewsprintColors.ink,
-        surface = NewsprintColors.paper,
-        onSurface = NewsprintColors.ink,
-        onSurfaceVariant = NewsprintColors.inkSecondary,
-        error = NewsprintColors.error,
-        onError = NewsprintColors.paper,
+        primary = editionColors.accent,
+        onPrimary = editionColors.paper,
+        secondary = editionColors.inkSecondary,
+        onSecondary = editionColors.paper,
+        background = editionColors.paper,
+        onBackground = editionColors.ink,
+        surface = editionColors.paper,
+        onSurface = editionColors.ink,
+        onSurfaceVariant = editionColors.inkSecondary,
+        error = editionColors.error,
+        onError = editionColors.paper,
     )
     MaterialTheme(colorScheme = colorScheme) {
         CompositionLocalProvider(
             LocalMatutineEditionTypography provides editionTypography,
-            LocalContentColor provides NewsprintColors.ink,
+            LocalMatutineEditionColors provides editionColors,
+            LocalContentColor provides editionColors.ink,
         ) {
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier.fillMaxSize(),

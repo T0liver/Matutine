@@ -1500,6 +1500,40 @@ END:VEVENT
 END:VCALENDAR
 """
 
+class EditionTaskPersistenceTest {
+    private val sampleDay = LocalDate(2026, 11, 10)
+
+    @Test
+    fun updateMorningEdition_bumpsRevisionAndPersistsTasks() = runBlocking {
+        val morning = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-2026-11-10",
+            revision = 3,
+            isSample = false,
+            tasks = listOf(EditionTask("Buy milk")),
+        )
+        val store = FakeStore(morning = morning)
+        val repo = LocalEditionRepository(store, today = { sampleDay })
+
+        val updated = morning.copy(tasks = morning.tasks.map { it.copy(completed = true) })
+        val saved = repo.updateMorningEdition(updated).getOrThrow()
+
+        assertEquals(4, saved.revision)
+        assertTrue(saved.tasks.single().completed)
+        assertEquals(saved, store.saved)
+    }
+
+    @Test
+    fun updateMorningEdition_rejectsWrongDayOrId() = runBlocking {
+        val morning = SampleGenerator.forDay(sampleDay).copy(id = "morning-2026-11-10", revision = 1, isSample = false)
+        val store = FakeStore(morning = morning)
+        val repo = LocalEditionRepository(store, today = { sampleDay })
+        val otherDay = morning.copy(dayKey = "2026-11-09")
+        assertTrue(repo.updateMorningEdition(otherDay).isFailure)
+        val otherId = morning.copy(id = "other")
+        assertTrue(repo.updateMorningEdition(otherId).isFailure)
+    }
+}
+
 class SampleGeneratorTest {
     @Test
     fun bundledFeeds_keepSourceOrderAndCalendarTimes() {
@@ -1540,5 +1574,47 @@ class SampleGeneratorTest {
         val settings = decodeReaderSettings("{}")
         assertTrue(settings.topics.isEmpty())
         assertTrue(encodeReaderSettings(ReaderSettings()).contains("\"topics\":[]"))
+        assertEquals(DEFAULT_NOTIFICATION_TIME, settings.notificationTime)
+    }
+
+    @Test
+    fun saveNotificationTime_normalizesLeadingZeros() {
+        val store = FakeStore()
+        val repo = LocalEditionRepository(store)
+        assertTrue(repo.saveNotificationTime("7:5").isSuccess)
+        assertEquals("07:05", store.readSettings()?.notificationTime)
+    }
+
+    @Test
+    fun saveTopics_preservesNotificationTime() {
+        val store = FakeStore(settings = ReaderSettings(notificationTime = "08:30"))
+        val repo = LocalEditionRepository(store)
+        repo.saveTopics(listOf("Rust"))
+        assertEquals("08:30", store.readSettings()?.notificationTime)
+        assertEquals(listOf("Rust"), store.readSettings()?.topics)
+    }
+
+    @Test
+    fun savedNotificationTime_defaultsToSevenWhenSettingsAbsent() {
+        val repo = LocalEditionRepository(FakeStore())
+        assertEquals(DEFAULT_NOTIFICATION_TIME, repo.savedNotificationTime())
+    }
+
+    @Test
+    fun saveNotificationBody_persistsTrimmedSentence() {
+        val store = FakeStore()
+        val repo = LocalEditionRepository(store)
+        assertTrue(repo.saveNotificationBody("  Morning. ").isSuccess)
+        assertEquals("Morning.", repo.savedNotificationBody())
+    }
+
+    @Test
+    fun saveEditionThemeAndLayout_persistKnownIds() {
+        val store = FakeStore()
+        val repo = LocalEditionRepository(store)
+        assertTrue(repo.saveEditionTheme(DEFAULT_EDITION_THEME).isSuccess)
+        assertTrue(repo.saveEditionLayout(DEFAULT_EDITION_LAYOUT).isSuccess)
+        assertEquals(DEFAULT_EDITION_THEME, repo.savedEditionTheme())
+        assertEquals(DEFAULT_EDITION_LAYOUT, repo.savedEditionLayout())
     }
 }

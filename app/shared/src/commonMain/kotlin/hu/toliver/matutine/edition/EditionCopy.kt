@@ -5,6 +5,7 @@ internal object EditionCopy {
     const val NO_EVENTS = "No events today."
     const val CALENDAR_PERMISSION_OFF = "Calendar permission is off."
     const val NO_TASKS = "No tasks yet."
+    const val SAVED = "Saved."
     const val SETTING_TODAYS_EDITION = "Setting today's edition."
     const val WHAT_DO_YOU_WANT_TO_READ_ABOUT = "What do you want to read about?"
     const val WHAT_SHOULD_THE_PAGE_NOTICE = "What should the page notice about your day?"

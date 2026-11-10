@@ -17,6 +17,7 @@ class EditionCopyTest {
         assertEquals("No events today.", EditionCopy.NO_EVENTS)
         assertEquals("Calendar permission is off.", EditionCopy.CALENDAR_PERMISSION_OFF)
         assertEquals("No tasks yet.", EditionCopy.NO_TASKS)
+        assertEquals("Saved.", EditionCopy.SAVED)
         assertEquals("Setting today's edition.", EditionCopy.SETTING_TODAYS_EDITION)
         assertEquals("What do you want to read about?", EditionCopy.WHAT_DO_YOU_WANT_TO_READ_ABOUT)
         assertEquals("What should the page notice about your day?", EditionCopy.WHAT_SHOULD_THE_PAGE_NOTICE)

@@ -3,6 +3,7 @@ package hu.toliver.matutine.edition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,11 +26,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -37,9 +44,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import hu.toliver.matutine.browser.openUrl
+import hu.toliver.matutine.theme.EditionThemeColors
 import hu.toliver.matutine.theme.LocalMatutineEditionTypography
 import hu.toliver.matutine.theme.MatutineEditionTypography
 import hu.toliver.matutine.theme.NewsprintColors
@@ -51,8 +62,11 @@ fun EditionScreen(
     onOpenSettings: () -> Unit,
     showNoTopicLine: Boolean,
     onOpenInterests: () -> Unit,
+    onToggleTask: (Int) -> Unit,
+    onAddTask: (String) -> Unit,
     calendarPermissionOff: Boolean = false,
     onOpenCalendarPermission: () -> Unit = {},
+    editionLayoutId: String = DEFAULT_EDITION_LAYOUT,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -71,11 +85,15 @@ fun EditionScreen(
             edition = state.edition,
             generating = state.generating,
             notice = state.notice,
+            taskSaved = state.taskSaved,
             showNoTopicLine = showNoTopicLine,
             onOpenInterests = onOpenInterests,
             onOpenSettings = onOpenSettings,
+            onToggleTask = onToggleTask,
+            onAddTask = onAddTask,
             calendarPermissionOff = calendarPermissionOff,
             onOpenCalendarPermission = onOpenCalendarPermission,
+            editionLayoutId = editionLayoutId,
             typography = typography,
             modifier = modifier,
         )
@@ -87,12 +105,12 @@ private fun LoadingEdition(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(NewsprintColors.paper)
+            .background(EditionThemeColors.current.paper)
             .safeContentPadding(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CircularProgressIndicator(color = NewsprintColors.ink)
+        CircularProgressIndicator(color = EditionThemeColors.current.ink)
     }
 }
 
@@ -112,18 +130,18 @@ private fun SampleLoadError(
     ) {
         Text(
             text = "The sample edition didn't load.",
-            style = typography.body.copy(color = NewsprintColors.ink),
+            style = typography.body.copy(color = EditionThemeColors.current.ink),
         )
         Spacer(Modifier.height(16.dp))
         Button(
             onClick = onRetry,
             colors = ButtonDefaults.buttonColors(
-                containerColor = NewsprintColors.ink,
-                contentColor = NewsprintColors.paper,
+                containerColor = EditionThemeColors.current.ink,
+                contentColor = EditionThemeColors.current.paper,
             ),
             shape = RoundedCornerShape(4.dp),
         ) {
-            Text(text = "Try again", style = typography.body.copy(color = NewsprintColors.paper))
+            Text(text = "Try again", style = typography.body.copy(color = EditionThemeColors.current.paper))
         }
     }
 }
@@ -154,7 +172,7 @@ private fun EmptyFrontPage(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(NewsprintColors.paper)
+            .background(EditionThemeColors.current.paper)
             .safeContentPadding()
             .verticalScroll(scroll)
             .padding(horizontal = 16.dp, vertical = 16.dp),
@@ -164,7 +182,7 @@ private fun EmptyFrontPage(
             onClick = onOpenSettings,
             modifier = Modifier.heightIn(min = chromeControlMinHeight()),
         ) {
-            Text(text = "Settings", style = typography.body.copy(color = NewsprintColors.ink))
+            Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
         }
         Masthead(name = "Matutine", dateLine = "", typography = typography)
         if (generating) {
@@ -176,7 +194,7 @@ private fun EmptyFrontPage(
         if (!notice.isNullOrBlank()) {
             Text(
                 text = notice,
-                style = typography.body.copy(color = NewsprintColors.error),
+                style = typography.body.copy(color = EditionThemeColors.current.error),
             )
         }
     }
@@ -187,20 +205,24 @@ private fun EditionContent(
     edition: Edition,
     generating: Boolean,
     notice: String?,
+    taskSaved: Boolean,
     showNoTopicLine: Boolean,
     onOpenInterests: () -> Unit,
     onOpenSettings: () -> Unit,
+    onToggleTask: (Int) -> Unit,
+    onAddTask: (String) -> Unit,
     calendarPermissionOff: Boolean,
     onOpenCalendarPermission: () -> Unit,
+    editionLayoutId: String,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
     val scroll = rememberScrollState()
-    val forceSingleColumn = editionForceSingleColumn()
+    val forceSingleColumn = editionForceSingleColumnForLayout(editionLayoutId)
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(NewsprintColors.paper)
+            .background(EditionThemeColors.current.paper)
             .safeContentPadding(),
     ) {
         val wide = usesWideEditionLayout(maxWidth, forceSingleColumn)
@@ -215,7 +237,7 @@ private fun EditionContent(
                 onClick = onOpenSettings,
                 modifier = Modifier.heightIn(min = chromeControlMinHeight()),
             ) {
-                Text(text = "Settings", style = typography.body.copy(color = NewsprintColors.ink))
+                Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
             }
             Masthead(edition.mastheadName, edition.dateLine, typography)
             if (generating) {
@@ -227,35 +249,38 @@ private fun EditionContent(
             if (!notice.isNullOrBlank()) {
                 Text(
                     text = notice,
-                    style = typography.body.copy(color = NewsprintColors.error),
+                    style = typography.body.copy(color = EditionThemeColors.current.error),
                 )
             }
             edition.sourceNotes.forEach { note ->
                 Text(
                     text = note,
-                    style = typography.body.copy(color = NewsprintColors.error),
+                    style = typography.body.copy(color = EditionThemeColors.current.error),
                 )
             }
             if (edition.isSample) {
                 Text(
                     text = "SAMPLE EDITION",
-                    style = typography.kicker.copy(color = NewsprintColors.accent),
+                    style = typography.kicker.copy(color = EditionThemeColors.current.accent),
                 )
             } else if (showNoTopicLine) {
                 TextButton(
                     onClick = onOpenInterests,
                     modifier = Modifier.heightIn(min = chromeControlMinHeight()),
-                    colors = ButtonDefaults.textButtonColors(contentColor = NewsprintColors.ink),
+                    colors = ButtonDefaults.textButtonColors(contentColor = EditionThemeColors.current.ink),
                 ) {
                     Text(
                         text = EditionCopy.WHAT_DO_YOU_WANT_TO_READ_ABOUT,
-                        style = typography.body.copy(color = NewsprintColors.ink),
+                        style = typography.body.copy(color = EditionThemeColors.current.ink),
                     )
                 }
             }
             if (wide) {
                 WideEditionBody(
                     edition = edition,
+                    taskSaved = taskSaved,
+                    onToggleTask = onToggleTask,
+                    onAddTask = onAddTask,
                     calendarPermissionOff = calendarPermissionOff,
                     onOpenCalendarPermission = onOpenCalendarPermission,
                     typography = typography,
@@ -265,7 +290,13 @@ private fun EditionContent(
                 BriefingBlock(edition.briefing, typography)
                 StoryBlock(edition.stories, typography)
                 CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography)
-                TaskBlock(edition.tasks, typography)
+                TaskBlock(
+                    tasks = edition.tasks,
+                    taskSaved = taskSaved,
+                    onToggleTask = onToggleTask,
+                    onAddTask = onAddTask,
+                    typography = typography,
+                )
             }
         }
     }
@@ -274,6 +305,9 @@ private fun EditionContent(
 @Composable
 private fun WideEditionBody(
     edition: Edition,
+    taskSaved: Boolean,
+    onToggleTask: (Int) -> Unit,
+    onAddTask: (String) -> Unit,
     calendarPermissionOff: Boolean,
     onOpenCalendarPermission: () -> Unit,
     typography: MatutineEditionTypography,
@@ -293,14 +327,20 @@ private fun WideEditionBody(
         VerticalDivider(
             modifier = Modifier.fillMaxHeight(),
             thickness = 1.dp,
-            color = NewsprintColors.rule,
+            color = EditionThemeColors.current.rule,
         )
         Column(
             modifier = Modifier.width(EditionRailWidth),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography)
-            TaskBlock(edition.tasks, typography)
+            TaskBlock(
+                tasks = edition.tasks,
+                taskSaved = taskSaved,
+                onToggleTask = onToggleTask,
+                onAddTask = onAddTask,
+                typography = typography,
+            )
         }
     }
 }
@@ -308,6 +348,7 @@ private fun WideEditionBody(
 @Composable
 private fun Masthead(name: String, dateLine: String, typography: MatutineEditionTypography) {
     val density = LocalDensity.current
+    val accent = EditionThemeColors.current.accent
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = name,
@@ -316,7 +357,7 @@ private fun Masthead(name: String, dateLine: String, typography: MatutineEdition
                 val accentThickness = with(density) { 2.dp.toPx() }
                 val y = size.height
                 drawLine(
-                    color = NewsprintColors.accent,
+                    color = accent,
                     start = Offset(0f, y),
                     end = Offset(size.width, y),
                     strokeWidth = accentThickness,
@@ -331,7 +372,7 @@ private fun Masthead(name: String, dateLine: String, typography: MatutineEdition
         }
         HorizontalDivider(
             thickness = 1.dp,
-            color = NewsprintColors.ink,
+            color = EditionThemeColors.current.ink,
         )
     }
 }
@@ -433,11 +474,11 @@ private fun CalendarBlock(
             TextButton(
                 onClick = onOpenCalendarPermission,
                 modifier = Modifier.heightIn(min = chromeControlMinHeight()),
-                colors = ButtonDefaults.textButtonColors(contentColor = NewsprintColors.ink),
+                colors = ButtonDefaults.textButtonColors(contentColor = EditionThemeColors.current.ink),
             ) {
                 Text(
                     text = EditionCopy.CALENDAR_PERMISSION_OFF,
-                    style = typography.body.copy(color = NewsprintColors.ink),
+                    style = typography.body.copy(color = EditionThemeColors.current.ink),
                 )
             }
         }
@@ -460,30 +501,102 @@ private fun CalendarBlock(
 }
 
 @Composable
-private fun TaskBlock(tasks: List<EditionTask>, typography: MatutineEditionTypography) {
+private fun TaskBlock(
+    tasks: List<EditionTask>,
+    taskSaved: Boolean,
+    onToggleTask: (Int) -> Unit,
+    onAddTask: (String) -> Unit,
+    typography: MatutineEditionTypography,
+) {
+    var draft by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionLabel("Tasks", typography)
         if (tasks.isEmpty()) {
             Text(text = EditionCopy.NO_TASKS, style = typography.body)
         } else {
-            tasks.forEach { task ->
-                TaskRow(task, typography)
+            tasks.forEachIndexed { index, task ->
+                TaskRow(task, typography, onToggle = { onToggleTask(index) })
             }
+        }
+        TaskAddLine(
+            value = draft,
+            onValueChange = { draft = it },
+            onConfirm = {
+                onAddTask(draft)
+                draft = ""
+            },
+            typography = typography,
+        )
+        if (taskSaved) {
+            Text(text = EditionCopy.SAVED, style = typography.meta)
         }
     }
 }
 
 @Composable
-private fun TaskRow(task: EditionTask, typography: MatutineEditionTypography) {
-    androidx.compose.foundation.layout.Row(
+private fun TaskAddLine(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    typography: MatutineEditionTypography,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = chromeControlMinHeight()),
+        textStyle = typography.body.copy(color = EditionThemeColors.current.ink),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { onConfirm() }),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = EditionThemeColors.current.ink,
+            unfocusedTextColor = EditionThemeColors.current.ink,
+            focusedContainerColor = EditionThemeColors.current.paper,
+            unfocusedContainerColor = EditionThemeColors.current.paper,
+            focusedBorderColor = EditionThemeColors.current.ink,
+            unfocusedBorderColor = EditionThemeColors.current.rule,
+            cursorColor = EditionThemeColors.current.ink,
+        ),
+        shape = RoundedCornerShape(0.dp),
+    )
+}
+
+@Composable
+private fun TaskRow(
+    task: EditionTask,
+    typography: MatutineEditionTypography,
+    onToggle: () -> Unit,
+) {
+    val touchTarget = if (editionForceSingleColumn()) {
+        Modifier.minimumInteractiveComponentSize()
+    } else {
+        Modifier
+    }
+    Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.padding(vertical = 4.dp),
+        modifier = Modifier
+            .padding(vertical = 4.dp)
+            .then(touchTarget)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onToggle,
+            ),
     ) {
         Box(
             modifier = Modifier
                 .size(16.dp)
-                .border(1.dp, NewsprintColors.ink, RoundedCornerShape(0.dp)),
+                .border(1.dp, EditionThemeColors.current.ink, RoundedCornerShape(0.dp))
+                .then(
+                    if (task.completed) {
+                        Modifier.background(EditionThemeColors.current.ink)
+                    } else {
+                        Modifier
+                    },
+                ),
         )
         val titleStyle = if (task.completed) {
             typography.body.copy(textDecoration = TextDecoration.LineThrough)
@@ -504,5 +617,5 @@ private fun SectionLabel(label: String, typography: MatutineEditionTypography) {
 
 @Composable
 private fun HairlineDivider() {
-    HorizontalDivider(thickness = 1.dp, color = NewsprintColors.rule)
+    HorizontalDivider(thickness = 1.dp, color = EditionThemeColors.current.rule)
 }
