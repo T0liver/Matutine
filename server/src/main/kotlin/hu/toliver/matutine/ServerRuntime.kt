@@ -1,9 +1,11 @@
 package hu.toliver.matutine
 
+import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.EditionStore
 import hu.toliver.matutine.edition.EditionStory
 import hu.toliver.matutine.edition.LocalEditionRepository
 import hu.toliver.matutine.edition.ServerProcessConfig
+import hu.toliver.matutine.edition.toDayKey
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.util.AttributeKey
@@ -11,6 +13,7 @@ import kotlin.time.Instant
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 internal val ServerRuntimeKey = AttributeKey<ServerRuntime>("matutine.runtime")
 
@@ -42,6 +45,12 @@ internal class ServerRuntime(
     }
 
     fun repository(): LocalEditionRepository = repository
+
+    suspend fun listTodayEditions(): List<Edition> {
+        val dayKey = clock().toLocalDateTime(zone).date.toDayKey()
+        val morning = documents.loadMorningEdition(dayKey)
+        return listOfNotNull(morning) + repository.loadSameDayExtras()
+    }
 
     fun reloadRepository() {
         repository = buildRepository()

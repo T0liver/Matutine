@@ -462,6 +462,9 @@ interface EditionRepository {
     suspend fun loadSameDayExtras(): List<Edition>
     suspend fun updateMorningEdition(edition: Edition): Result<Edition>
     suspend fun updateExtra(edition: Edition): Result<Edition>
+
+    /** Set by a remote load that had to show the copy already on the device. */
+    fun consumeLoadNotice(): String? = null
 }
 
 internal fun keepMorningEdits(existing: Edition, generated: Edition): Edition {

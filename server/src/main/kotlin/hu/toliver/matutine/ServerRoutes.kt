@@ -6,6 +6,7 @@ import hu.toliver.matutine.edition.FEED_DIDNT_LOAD
 import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.ServerProcessConfig
 import hu.toliver.matutine.edition.SourceList
+import hu.toliver.matutine.edition.EditionRole
 import hu.toliver.matutine.edition.decodeEdition
 import hu.toliver.matutine.edition.decodeCalDavAccount
 import hu.toliver.matutine.edition.decodeReaderSettings
@@ -13,6 +14,7 @@ import hu.toliver.matutine.edition.decodeServerProcessConfig
 import hu.toliver.matutine.edition.decodeSourceList
 import hu.toliver.matutine.edition.encodeCalDavAccount
 import hu.toliver.matutine.edition.encodeEdition
+import hu.toliver.matutine.edition.encodeEditionList
 import hu.toliver.matutine.edition.encodeReaderSettings
 import hu.toliver.matutine.edition.encodeServerProcessConfig
 import hu.toliver.matutine.edition.encodeSourceList
@@ -127,7 +129,11 @@ internal fun Route.configureMatutineApi(runtime: ServerRuntime) {
     put("/editions/by-id") {
         if (!authorize(call, runtime)) return@put
         val incoming = decodeEdition(call.receiveText())
-        val saved = runtime.repository().updateMorningEdition(incoming)
+        val saved = if (incoming.role == EditionRole.extra) {
+            runtime.repository().updateExtra(incoming)
+        } else {
+            runtime.repository().updateMorningEdition(incoming)
+        }
         if (saved.isFailure) {
             call.respondText(
                 saved.exceptionOrNull()?.message ?: "bad_request",
@@ -136,6 +142,22 @@ internal fun Route.configureMatutineApi(runtime: ServerRuntime) {
             return@put
         }
         call.respondText(encodeEdition(saved.getOrThrow()), ContentType.Application.Json)
+    }
+    get("/editions") {
+        if (!authorize(call, runtime)) return@get
+        call.respondText(encodeEditionList(runtime.listTodayEditions()), ContentType.Application.Json)
+    }
+    post("/editions") {
+        if (!authorize(call, runtime)) return@post
+        val generated = runtime.repository().newEditionNow()
+        if (generated.isFailure) {
+            call.respondText(
+                generated.exceptionOrNull()?.message ?: FEED_DIDNT_LOAD,
+                status = HttpStatusCode.BadRequest,
+            )
+            return@post
+        }
+        call.respondText(encodeEdition(generated.getOrThrow()), ContentType.Application.Json)
     }
     post("/editions/morning/regenerate") {
         if (!authorize(call, runtime)) return@post

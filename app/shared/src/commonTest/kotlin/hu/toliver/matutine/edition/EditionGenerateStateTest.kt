@@ -453,6 +453,25 @@ class EditionGenerateStateTest {
         assertEquals(1, repository.generateCalls)
     }
 
+    @Test
+    fun unreachableLoadShowsTheStoredEditionAndTheExactSentence() {
+        val repository = FakeEditionRepository(sample, loadNotice = SERVER_COPY_ON_DEVICE)
+        val viewModel = viewModel(repository)
+
+        val ready = viewModel.state as EditionUiState.Ready
+        assertEquals(sample, ready.edition)
+        assertEquals("Couldn't reach the server. Showing the copy on this device.", ready.notice)
+    }
+
+    @Test
+    fun unreachableLoadWithNoStoredEditionKeepsTheSentenceOnTheEmptyPage() {
+        val repository = FakeEditionRepository(sample, loadError = SERVER_COPY_ON_DEVICE)
+        val viewModel = viewModel(repository)
+
+        val empty = viewModel.state as EditionUiState.MissingMorning
+        assertEquals("Couldn't reach the server. Showing the copy on this device.", empty.notice)
+    }
+
     private fun viewModel(repository: EditionRepository) =
         EditionViewModel(repository, CoroutineScope(Dispatchers.Unconfined))
 }
@@ -468,6 +487,7 @@ private class FakeEditionRepository(
     private val failSavedTopics: Boolean = false,
     private val missingMorning: Boolean = false,
     private val loadError: String? = null,
+    private val loadNotice: String? = null,
     var blockSave: CompletableDeferred<Unit>? = null,
     private val generate: suspend () -> Edition = { edition },
 ) : EditionRepository {
@@ -489,6 +509,8 @@ private class FakeEditionRepository(
         loadError != null -> Result.failure(IllegalStateException(loadError))
         else -> Result.success(edition)
     }
+
+    override fun consumeLoadNotice(): String? = loadNotice
 
     override suspend fun retrySample(): Result<Edition> = Result.success(edition)
 

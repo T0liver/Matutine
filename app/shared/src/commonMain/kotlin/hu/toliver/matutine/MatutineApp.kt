@@ -19,6 +19,11 @@ import hu.toliver.matutine.edition.EditionViewModel
 import hu.toliver.matutine.edition.TypewriterPane
 import hu.toliver.matutine.edition.showsTypewriter
 import hu.toliver.matutine.edition.LocalEditionRepository
+import hu.toliver.matutine.edition.RemoteEditionRepository
+import hu.toliver.matutine.edition.SERVER_ADDRESS_NEEDS_HTTP
+import hu.toliver.matutine.edition.ServerLink
+import hu.toliver.matutine.edition.normalizeServerBaseUrl
+import hu.toliver.matutine.edition.openRemoteTransport
 import hu.toliver.matutine.edition.calendarPermissionIsOff
 import hu.toliver.matutine.edition.openCalendarPermissionSettings
 import hu.toliver.matutine.edition.readCalDavCalendar
@@ -29,8 +34,13 @@ import hu.toliver.matutine.edition.showsNoTopicLine
 import hu.toliver.matutine.edition.writesDeviceCalendarSnapshot
 import hu.toliver.matutine.settings.InterestsScreen
 import hu.toliver.matutine.settings.SettingsScreen
+import hu.toliver.matutine.settings.clearDeviceServerLink
+import hu.toliver.matutine.settings.phoneSettingsVisibility
+import hu.toliver.matutine.settings.readDeviceServerLink
 import hu.toliver.matutine.settings.showsAndroidPaperCustomization
 import hu.toliver.matutine.settings.showsNotificationTimeRow
+import hu.toliver.matutine.settings.showsServerLinkSettings
+import hu.toliver.matutine.settings.writeDeviceServerLink
 import hu.toliver.matutine.store.FileEditionStore
 import hu.toliver.matutine.theme.MatutineTheme
 import hu.toliver.matutine.theme.resolveEditionTheme
@@ -54,9 +64,16 @@ fun MatutineApp(
     windowFlush: WindowFlush = WindowFlush(),
     typewriter: @Composable (TypewriterPane) -> Unit = {},
 ) {
-    val viewModel = remember(dataRoot) {
+    var serverRevision by remember { mutableStateOf(0) }
+    var serverBaseUrl by remember { mutableStateOf("") }
+    var serverToken by remember { mutableStateOf("") }
+    var serverAddressError by remember { mutableStateOf<String?>(null) }
+    val serverLink = remember(dataRoot, serverRevision) {
+        if (showsServerLinkSettings()) readDeviceServerLink(dataRoot) else null
+    }
+    val viewModel = remember(dataRoot, serverRevision) {
         val store = FileEditionStore(dataRoot)
-        val repository = LocalEditionRepository(
+        val local = LocalEditionRepository(
             store,
             readFeed = ::readFeedDocument,
             writesDeviceCalendarSnapshot = writesDeviceCalendarSnapshot(),
@@ -64,7 +81,23 @@ fun MatutineApp(
             readCalDav = ::readCalDavCalendar,
             summarize = ::summarizeWithGemini,
         )
+        val link = if (showsServerLinkSettings()) readDeviceServerLink(dataRoot) else null
+        val repository = if (link == null) {
+            local
+        } else {
+            RemoteEditionRepository(
+                local = local,
+                store = store,
+                link = link,
+                transport = openRemoteTransport(link.baseUrl),
+                writesEditions = showsTypewriter(),
+            )
+        }
         EditionViewModel(repository)
+    }
+    LaunchedEffect(serverLink) {
+        serverBaseUrl = serverLink?.baseUrl.orEmpty()
+        serverToken = serverLink?.token.orEmpty()
     }
     var screen by remember { mutableStateOf<MatutineScreen>(MatutineScreen.Edition) }
     var typewriterDraft by remember { mutableStateOf("") }
@@ -100,6 +133,7 @@ fun MatutineApp(
     val calendarPermissionOff = rememberCalendarPermissionOff()
     val ready = viewModel.state as? EditionUiState.Ready
     val paperSettings = showsAndroidPaperCustomization()
+    val settingsVisibility = phoneSettingsVisibility(serverLink != null)
     MatutineTheme(editionColors = resolveEditionTheme(viewModel.editionTheme)) {
         when (val current = screen) {
             MatutineScreen.Settings -> SettingsScreen(
@@ -139,6 +173,37 @@ fun MatutineApp(
                 onEditionThemeSelect = if (paperSettings) viewModel::saveEditionTheme else null,
                 editionLayoutId = if (paperSettings) viewModel.editionLayout else null,
                 onEditionLayoutSelect = if (paperSettings) viewModel::saveEditionLayout else null,
+                showServerLink = showsServerLinkSettings(),
+                serverBaseUrl = serverBaseUrl,
+                onServerBaseUrlChange = {
+                    serverAddressError = null
+                    serverBaseUrl = it
+                },
+                serverToken = serverToken,
+                onServerTokenChange = { serverToken = it },
+                serverAddressError = serverAddressError,
+                onSaveServer = {
+                    val normalized = normalizeServerBaseUrl(serverBaseUrl)
+                    if (normalized == null) {
+                        serverAddressError = SERVER_ADDRESS_NEEDS_HTTP
+                    } else {
+                        writeDeviceServerLink(dataRoot, ServerLink(baseUrl = normalized, token = serverToken))
+                        serverAddressError = null
+                        serverRevision += 1
+                    }
+                },
+                onForgetServer = if (settingsVisibility.offerForgetServer) {
+                    {
+                        clearDeviceServerLink(dataRoot)
+                        serverAddressError = null
+                        serverRevision += 1
+                    }
+                } else {
+                    null
+                },
+                showSources = settingsVisibility.showSources,
+                showGeminiKey = settingsVisibility.showGeminiKey,
+                showInterests = settingsVisibility.showInterests,
             )
             is MatutineScreen.Interests -> InterestsScreen(
                 topics = viewModel.topics,
@@ -163,7 +228,7 @@ fun MatutineApp(
                 state = viewModel.state,
                 onRetrySample = viewModel::retrySample,
                 onOpenSettings = { screen = MatutineScreen.Settings },
-                showNoTopicLine = ready?.let {
+                showNoTopicLine = serverLink == null && ready?.let {
                     showsNoTopicLine(it.edition.isSample, viewModel.topics)
                 } == true,
                 onOpenInterests = { screen = MatutineScreen.Interests(returnToSettings = false) },

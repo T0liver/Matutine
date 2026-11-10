@@ -18,4 +18,10 @@ class MorningEditionWorkerTest {
             schedule.request.workSpec.workerClassName,
         )
     }
+
+    @Test
+    fun remoteMorningTickDoesNotInsert() {
+        assertEquals(false, morningTickInserts(serverConfigured = true))
+        assertEquals(true, morningTickInserts(serverConfigured = false))
+    }
 }

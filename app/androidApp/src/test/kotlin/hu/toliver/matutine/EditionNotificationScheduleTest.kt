@@ -6,6 +6,8 @@ import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class EditionNotificationScheduleTest {
     @Test
@@ -33,5 +35,16 @@ class EditionNotificationScheduleTest {
             EditionNotificationWorker::class.java.name,
             schedule.request.workSpec.workerClassName,
         )
+    }
+
+    @Test
+    fun missingOrUnreachableMorningDoesNotPostANotification() {
+        assertFalse(morningEditionWasReturned(null))
+        assertFalse(morningEditionWasReturned(404))
+        assertFalse(morningEditionWasReturned(401))
+        assertTrue(morningEditionWasReturned(200))
+        assertFalse(shouldPostEditionNotification(notificationsAllowed = true, morningReturned = false))
+        assertFalse(shouldPostEditionNotification(notificationsAllowed = false, morningReturned = true))
+        assertTrue(shouldPostEditionNotification(notificationsAllowed = true, morningReturned = true))
     }
 }

@@ -13,6 +13,7 @@ import hu.toliver.matutine.edition.readDeviceCalendar
 import hu.toliver.matutine.edition.readFeedDocument
 import hu.toliver.matutine.edition.summarizeWithGemini
 import hu.toliver.matutine.edition.writesDeviceCalendarSnapshot
+import hu.toliver.matutine.settings.readDeviceServerLink
 import hu.toliver.matutine.store.FileEditionStore
 import hu.toliver.matutine.store.androidDataRoot
 import java.util.concurrent.TimeUnit
@@ -28,10 +29,15 @@ class MorningEditionWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): ListenableWorker.Result {
-        morningRepository(applicationContext).runMorning()
+        val root = androidDataRoot(applicationContext)
+        if (morningTickInserts(readDeviceServerLink(root) != null)) {
+            morningRepository(applicationContext).runMorning()
+        }
         return ListenableWorker.Result.success()
     }
 }
+
+internal fun morningTickInserts(serverConfigured: Boolean): Boolean = !serverConfigured
 
 internal data class MorningWorkSchedule(
     val uniqueName: String,

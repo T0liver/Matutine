@@ -73,6 +73,17 @@ fun SettingsScreen(
     onEditionThemeSelect: ((String) -> Unit)? = null,
     editionLayoutId: String? = null,
     onEditionLayoutSelect: ((String) -> Unit)? = null,
+    showServerLink: Boolean = false,
+    serverBaseUrl: String = "",
+    onServerBaseUrlChange: (String) -> Unit = {},
+    serverToken: String = "",
+    onServerTokenChange: (String) -> Unit = {},
+    serverAddressError: String? = null,
+    onSaveServer: () -> Unit = {},
+    onForgetServer: (() -> Unit)? = null,
+    showSources: Boolean = true,
+    showGeminiKey: Boolean = true,
+    showInterests: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -87,6 +98,70 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(text = "Settings", style = typography.story.copy(color = NewsprintColors.ink))
+        if (showServerLink) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlHeight),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(text = "Server", style = typography.body.copy(color = NewsprintColors.ink))
+                newsprintField(
+                    value = serverBaseUrl,
+                    onValueChange = onServerBaseUrlChange,
+                    isError = serverAddressError != null,
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Next,
+                )
+                if (serverAddressError != null) {
+                    Text(
+                        text = serverAddressError,
+                        style = typography.body.copy(color = NewsprintColors.error),
+                    )
+                }
+                Text(text = "Token", style = typography.body.copy(color = NewsprintColors.ink))
+                newsprintField(
+                    value = serverToken,
+                    onValueChange = onServerTokenChange,
+                    isError = false,
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                    onDone = onSaveServer,
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+                OutlinedButton(
+                    onClick = onSaveServer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = controlHeight),
+                    border = BorderStroke(1.dp, NewsprintColors.ink),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = NewsprintColors.paper,
+                        contentColor = NewsprintColors.ink,
+                    ),
+                    shape = RoundedCornerShape(4.dp),
+                ) {
+                    Text(text = "Save server", style = typography.body.copy(color = NewsprintColors.ink))
+                }
+                if (onForgetServer != null) {
+                    OutlinedButton(
+                        onClick = onForgetServer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = controlHeight),
+                        border = BorderStroke(1.dp, NewsprintColors.ink),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = NewsprintColors.paper,
+                            contentColor = NewsprintColors.ink,
+                        ),
+                        shape = RoundedCornerShape(4.dp),
+                    ) {
+                        Text(text = "Forget server", style = typography.body.copy(color = NewsprintColors.ink))
+                    }
+                }
+            }
+        }
+        if (showSources) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -211,6 +286,8 @@ fun SettingsScreen(
                 )
             }
         }
+        }
+        if (showGeminiKey) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -227,6 +304,7 @@ fun SettingsScreen(
                 onDone = onSaveGeminiKey,
                 visualTransformation = PasswordVisualTransformation(),
             )
+        }
         }
         if (notificationTime != null && onNotificationTimeChange != null && onSaveNotificationTime != null) {
             Column(
@@ -325,14 +403,16 @@ fun SettingsScreen(
                 controlHeight = controlHeight,
             )
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = controlHeight)
-                .clickable(role = Role.Button, onClick = onOpenInterests),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(text = "Interests", style = typography.body.copy(color = NewsprintColors.ink))
+        if (showInterests) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = controlHeight)
+                    .clickable(role = Role.Button, onClick = onOpenInterests),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = "Interests", style = typography.body.copy(color = NewsprintColors.ink))
+            }
         }
         HorizontalDivider(thickness = 1.dp, color = NewsprintColors.rule)
         Button(

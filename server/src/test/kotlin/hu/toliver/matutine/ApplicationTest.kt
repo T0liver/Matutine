@@ -12,6 +12,7 @@ import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.SourceList
 import hu.toliver.matutine.edition.StoryRank
 import hu.toliver.matutine.edition.decodeEdition
+import hu.toliver.matutine.edition.decodeEditionList
 import hu.toliver.matutine.edition.encodeEdition
 import hu.toliver.matutine.edition.decodeReaderSettings
 import hu.toliver.matutine.edition.parseNotificationTime
@@ -174,6 +175,57 @@ class ApplicationTest {
             }.bodyAsText(),
         )
         assertEquals("Daily sync", reloaded.events.first().title)
+    }
+
+    @Test
+    fun putEdition_writesAnExtraWithoutReplacingTheMorning() = testApplication {
+        val root = Files.createTempDirectory("matutine-extra-edit").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        val day = todayLocalDate()
+        val morning = Edition(
+            id = "morning-${day.toDayKey()}",
+            revision = 4,
+            dayKey = day.toDayKey(),
+            role = EditionRole.morning,
+            mastheadName = "Matutine",
+            dateLine = "Kept date",
+            isSample = false,
+            briefing = "Morning stays",
+            stories = emptyList(),
+            events = emptyList(),
+            tasks = emptyList(),
+        )
+        val extra = morning.copy(
+            id = "extra-${day.toDayKey()}-1",
+            revision = 1,
+            role = EditionRole.extra,
+            briefing = "Extra",
+        )
+        store.saveMorningEdition(morning)
+        store.saveExtra(extra)
+        application {
+            installTestDocuments("matutine-demo", store)
+            module()
+        }
+        val response = client.put("/editions/by-id") {
+            header("Authorization", "Bearer matutine-demo")
+            setBody(encodeEdition(extra.copy(briefing = "Typed on the desktop")))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val saved = decodeEdition(response.bodyAsText())
+        assertEquals(EditionRole.extra, saved.role)
+        assertEquals("Typed on the desktop", saved.briefing)
+        assertEquals(extra.revision + 1, saved.revision)
+        val current = client.get("/editions/current") {
+            header("Authorization", "Bearer matutine-demo")
+        }
+        assertEquals("Morning stays", decodeEdition(current.bodyAsText()).briefing)
+        val listed = decodeEditionList(
+            client.get("/editions") {
+                header("Authorization", "Bearer matutine-demo")
+            }.bodyAsText(),
+        )
+        assertEquals("Typed on the desktop", listed.first { it.role == EditionRole.extra }.briefing)
     }
 
     @Test
@@ -442,6 +494,50 @@ class ApplicationTest {
         assertFalse(EditionTranscript.render(edition).contains(EditionTranscript.SAMPLE))
         assertTrue(edition.briefing.contains("Summary assembled from headlines."))
         assertEquals(StoryRank.lead, edition.stories.first().rank)
+    }
+
+    @Test
+    fun postEditions_insertsAnExtraAndLeavesTheMorning() = testApplication {
+        val root = Files.createTempDirectory("matutine-extra").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        store.writeSourceList(SourceList(feeds = listOf("https://example.com/rss.xml")))
+        application {
+            installTestDocuments("matutine-demo", store)
+            installServerClock(
+                zone = TimeZone.UTC,
+                generationTime = "07:00",
+                clock = { DUE },
+                readFeed = { PERSONAL_RSS },
+            )
+            module()
+        }
+        val morningResponse = client.post("/editions/morning/regenerate") {
+            header("Authorization", "Bearer matutine-demo")
+        }
+        assertEquals(HttpStatusCode.OK, morningResponse.status)
+        val morning = decodeEdition(morningResponse.bodyAsText())
+        val sourcesBefore = root.resolve("sources.json").readText()
+
+        val extraResponse = client.post("/editions") {
+            header("Authorization", "Bearer matutine-demo")
+        }
+        assertEquals(HttpStatusCode.OK, extraResponse.status)
+        val extra = decodeEdition(extraResponse.bodyAsText())
+        assertEquals(EditionRole.extra, extra.role)
+        assertEquals(morning.dayKey, extra.dayKey)
+
+        val current = client.get("/editions/current") {
+            header("Authorization", "Bearer matutine-demo")
+        }
+        assertEquals(morning, decodeEdition(current.bodyAsText()))
+        val listed = decodeEditionList(
+            client.get("/editions") {
+                header("Authorization", "Bearer matutine-demo")
+            }.bodyAsText(),
+        )
+        assertEquals(listOf(morning.id, extra.id), listed.map { it.id })
+        assertEquals(sourcesBefore, root.resolve("sources.json").readText())
+        assertFalse(root.resolve("calendar-snapshot.json").exists())
     }
 
     @Test

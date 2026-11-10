@@ -1,7 +1,5 @@
 package hu.toliver.matutine.edition
 
-const val TOKEN_DOES_NOT_MATCH = "That token doesn't match."
-
 data class WebPaperGate(
     val typedToken: String,
     val showEdition: Boolean,

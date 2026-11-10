@@ -302,8 +302,12 @@ class EditionViewModel(
                         sameDayExtras = loadExtras(),
                     )
                 }
-                .onFailure {
-                    state = restore(FEED_DIDNT_LOAD)
+                .onFailure { error ->
+                    val shown = when (val message = error.message) {
+                        TOKEN_DOES_NOT_MATCH, SERVER_COPY_ON_DEVICE -> message
+                        else -> FEED_DIDNT_LOAD
+                    }
+                    state = restore(shown)
                 }
         }
     }
@@ -313,9 +317,16 @@ class EditionViewModel(
         scope.launch {
             repository.loadCurrentMorningEdition()
                 .onSuccess { edition ->
-                    state = EditionUiState.Ready(edition, sameDayExtras = loadExtras())
+                    state = EditionUiState.Ready(
+                        edition,
+                        notice = repository.consumeLoadNotice(),
+                        sameDayExtras = loadExtras(),
+                    )
                 }
-                .onFailure { error -> state = mapFailure(error) }
+                .onFailure { error ->
+                    repository.consumeLoadNotice()
+                    state = mapFailure(error)
+                }
         }
     }
 
@@ -499,6 +510,9 @@ class EditionViewModel(
     private fun mapFailure(error: Throwable): EditionUiState {
         if (error.message == "sample_load_failed") {
             return EditionUiState.SampleLoadFailed()
+        }
+        if (error.message == SERVER_COPY_ON_DEVICE || error.message == TOKEN_DOES_NOT_MATCH) {
+            return EditionUiState.MissingMorning(notice = error.message)
         }
         if (error.message == MORNING_EDITION_NOT_READY) {
             return EditionUiState.MissingMorning()
