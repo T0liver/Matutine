@@ -1,12 +1,10 @@
 package hu.toliver.matutine
 
 import hu.toliver.matutine.edition.EditionStore
-import hu.toliver.matutine.edition.EditionStory
 import hu.toliver.matutine.edition.encodeEdition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -17,20 +15,19 @@ import io.ktor.server.http.content.staticResources
 import io.ktor.util.AttributeKey
 import kotlin.time.Clock
 import kotlin.time.Instant
-import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 
 private val SharedTokenKey = AttributeKey<String>("matutine.sharedToken")
 private val DocumentStoreKey = AttributeKey<EditionStore>("matutine.documents")
 private val ZoneKey = AttributeKey<TimeZone>("matutine.zone")
-private val GenerationRawKey = AttributeKey<String>("matutine.generationTime")
+internal val GenerationRawKey = AttributeKey<String>("matutine.generationTime")
 private val GeminiKeyKey = AttributeKey<String>("matutine.geminiKey")
 private val ClockKey = AttributeKey<() -> Instant>("matutine.clock")
 private val PortsKey = AttributeKey<ServerPorts>("matutine.ports")
 
 internal class ServerPorts(
     val readFeed: (suspend (String) -> String)? = null,
-    val summarize: (suspend (List<EditionStory>, String) -> String)? = null,
+    val summarize: (suspend (List<hu.toliver.matutine.edition.EditionStory>, String) -> String)? = null,
 )
 
 fun resolveSharedToken(raw: String?): String = raw?.takeIf { it.isNotBlank() } ?: "matutine-demo"
@@ -50,52 +47,48 @@ fun main() {
 }
 
 fun Application.module() {
-    val token = attributes.getOrNull(SharedTokenKey)
-        ?: resolveSharedToken(System.getenv("MATUTINE_TOKEN"))
+    val envToken = if (attributes.contains(SharedTokenKey)) {
+        attributes[SharedTokenKey]
+    } else {
+        System.getenv("MATUTINE_TOKEN")
+    }
     val documents = attributes.getOrNull(DocumentStoreKey)
         ?: DataDirectoryStore(resolveDataRoot(System.getenv("MATUTINE_DATA")))
-    val zone = attributes.getOrNull(ZoneKey)
-        ?: resolveServerTimeZone(System.getenv("MATUTINE_TIMEZONE"))
-    val generation = resolveGenerationTime(
-        if (attributes.contains(GenerationRawKey)) {
-            attributes[GenerationRawKey]
-        } else {
-            System.getenv("MATUTINE_GENERATION_TIME")
-        },
-    )
+    val envZone = if (attributes.contains(ZoneKey)) {
+        attributes[ZoneKey].id
+    } else {
+        System.getenv("MATUTINE_TIMEZONE")
+    }
+    val envGeneration = if (attributes.contains(GenerationRawKey)) {
+        attributes[GenerationRawKey]
+    } else {
+        System.getenv("MATUTINE_GENERATION_TIME")
+    }
     val geminiKey = attributes.getOrNull(GeminiKeyKey) ?: System.getenv("MATUTINE_GEMINI_KEY").orEmpty()
     val clock = attributes.getOrNull(ClockKey) ?: { Clock.System.now() }
     val ports = attributes.getOrNull(PortsKey)
     val readFeed = ports?.readFeed ?: ::serverReadFeed
     val summarize = ports?.summarize ?: ::serverSummarize
-    val repository = serverEditionRepository(
+    val runtime = ServerRuntime(
         documents = documents,
-        zone = zone,
+        application = this,
+        envToken = envToken,
+        envZone = envZone,
+        envGeneration = envGeneration,
+        envGeminiKey = geminiKey,
         clock = clock,
-        geminiKey = geminiKey,
         readFeed = readFeed,
         summarize = summarize,
     )
-    if (generation != null) {
-        val (hour, minute) = generation
-        val morning = ServerMorningClock(
-            zone = zone,
-            hour = hour,
-            minute = minute,
-            clock = clock,
-            insert = { insertScheduledMorning(documents, repository) },
-        )
-        val job = launch { morning.run() }
-        monitor.subscribe(ApplicationStopped) { job.cancel() }
-    }
+    attributes.put(ServerRuntimeKey, runtime)
     routing {
         get("/editions/current") {
             val authorization = call.request.headers["Authorization"]
-            if (!bearerMatches(authorization, token)) {
+            if (!bearerMatches(authorization, runtime.sharedToken)) {
                 call.respondText("unauthorized", status = HttpStatusCode.Unauthorized)
                 return@get
             }
-            val edition = repository.loadCurrentMorningEdition().getOrElse { error ->
+            val edition = runtime.repository().loadCurrentMorningEdition().getOrElse { error ->
                 call.respondText(
                     error.message ?: "unavailable",
                     status = HttpStatusCode.NotFound,
@@ -104,6 +97,7 @@ fun Application.module() {
             }
             call.respondText(encodeEdition(edition), ContentType.Application.Json)
         }
+        configureMatutineApi(runtime)
         staticResources("/", "web") {
             default("index.html")
         }
@@ -121,7 +115,7 @@ fun Application.installServerClock(
     geminiKey: String = "",
     clock: () -> Instant,
     readFeed: (suspend (String) -> String)? = null,
-    summarize: (suspend (List<EditionStory>, String) -> String)? = null,
+    summarize: (suspend (List<hu.toliver.matutine.edition.EditionStory>, String) -> String)? = null,
 ) {
     attributes.put(ZoneKey, zone)
     attributes.put(GenerationRawKey, generationTime)

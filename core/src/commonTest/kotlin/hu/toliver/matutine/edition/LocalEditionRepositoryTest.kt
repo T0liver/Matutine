@@ -19,6 +19,7 @@ private class FakeStore(
     private var settings: ReaderSettings? = null,
     private var snapshot: CalendarSnapshot? = null,
     private var calDavAccount: CalDavAccount? = null,
+    private var processConfig: ServerProcessConfig? = null,
 ) : EditionStore {
     var saved: Edition? = null
     var snapshotWrites: Int = 0
@@ -71,6 +72,12 @@ private class FakeStore(
 
     override fun writeCalDavAccount(account: CalDavAccount) {
         calDavAccount = account
+    }
+
+    override fun readProcessConfig(): ServerProcessConfig? = processConfig
+
+    override fun writeProcessConfig(config: ServerProcessConfig) {
+        processConfig = config
     }
 }
 

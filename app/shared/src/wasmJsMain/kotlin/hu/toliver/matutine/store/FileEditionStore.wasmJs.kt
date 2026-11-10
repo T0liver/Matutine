@@ -4,6 +4,7 @@ import hu.toliver.matutine.edition.CalDavAccount
 import hu.toliver.matutine.edition.CalendarSnapshot
 import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.ReaderSettings
+import hu.toliver.matutine.edition.ServerProcessConfig
 import hu.toliver.matutine.edition.SourceList
 
 actual class FileEditionStore actual constructor(
@@ -32,4 +33,8 @@ actual class FileEditionStore actual constructor(
     override fun readCalDavAccount(): CalDavAccount? = null
 
     override fun writeCalDavAccount(account: CalDavAccount) = Unit
+
+    override fun readProcessConfig(): ServerProcessConfig? = null
+
+    override fun writeProcessConfig(config: ServerProcessConfig) = Unit
 }

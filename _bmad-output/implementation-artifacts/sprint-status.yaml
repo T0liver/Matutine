@@ -62,8 +62,8 @@ development_status:
   epic-3: in-progress
   3-1-open-the-server-s-paper-in-the-browser: done
   3-2-generate-the-morning-edition-on-the-server-clock: done
-  3-3-configure-the-server-in-admin: backlog
-  3-4-light-edit-a-block-in-the-browser: backlog
+  3-3-configure-the-server-in-admin: done
+  3-4-light-edit-a-block-in-the-browser: done
   3-5-read-the-server-edition-on-android: backlog
   3-6-read-the-server-edition-on-desktop: backlog
   3-7-document-the-server-judge-path: backlog

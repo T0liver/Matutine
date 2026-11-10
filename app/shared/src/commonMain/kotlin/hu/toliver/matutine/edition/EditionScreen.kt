@@ -73,6 +73,8 @@ fun EditionScreen(
     onOpenExtra: (String) -> Unit = {},
     onOpenMorning: () -> Unit = {},
     readOnly: Boolean = false,
+    onOpenAdmin: (() -> Unit)? = null,
+    lightEdit: LightEditHooks? = null,
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -107,11 +109,21 @@ fun EditionScreen(
             onOpenExtra = onOpenExtra,
             onOpenMorning = onOpenMorning,
             readOnly = readOnly,
+            onOpenAdmin = onOpenAdmin,
+            lightEdit = lightEdit,
             typography = typography,
             modifier = modifier,
         )
     }
 }
+
+data class LightEditHooks(
+    val saved: Boolean,
+    val error: String?,
+    val resetKey: Int,
+    val onCommit: (LightEditField, String) -> Unit,
+    val onDiscard: () -> Unit,
+)
 
 @Composable
 private fun LoadingEdition(modifier: Modifier = Modifier) {
@@ -200,7 +212,7 @@ private fun EmptyFrontPage(
                 Text(text = "Settings", style = typography.body.copy(color = EditionThemeColors.current.ink))
             }
         }
-        Masthead(name = "Matutine", dateLine = "", typography = typography)
+        Masthead(name = "Matutine", dateLine = "", typography = typography, lightEdit = null)
         if (generating) {
             Text(
                 text = EditionCopy.SETTING_TODAYS_EDITION,
@@ -236,6 +248,8 @@ private fun EditionContent(
     onOpenExtra: (String) -> Unit,
     onOpenMorning: () -> Unit,
     readOnly: Boolean,
+    onOpenAdmin: (() -> Unit)?,
+    lightEdit: LightEditHooks?,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -281,6 +295,13 @@ private fun EditionContent(
                         Text(text = "New edition now", style = typography.body.copy(color = EditionThemeColors.current.ink))
                     }
                 }
+            } else if (onOpenAdmin != null) {
+                TextButton(
+                    onClick = onOpenAdmin,
+                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                ) {
+                    Text(text = "Admin", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                }
             }
             if (edition.role == EditionRole.extra) {
                 TextButton(
@@ -304,7 +325,10 @@ private fun EditionContent(
                     )
                 }
             }
-            Masthead(edition.mastheadName, edition.dateLine, typography)
+            Masthead(edition.mastheadName, edition.dateLine, typography, lightEdit)
+            if (lightEdit != null) {
+                LightEditStatusRow(lightEdit, typography)
+            }
             if (generating) {
                 Text(
                     text = EditionCopy.SETTING_TODAYS_EDITION,
@@ -349,13 +373,14 @@ private fun EditionContent(
                     calendarPermissionOff = calendarPermissionOff,
                     onOpenCalendarPermission = onOpenCalendarPermission,
                     readOnly = readOnly,
+                    lightEdit = lightEdit,
                     typography = typography,
                 )
             } else {
                 Spacer(Modifier.height(8.dp))
-                BriefingBlock(edition.briefing, typography)
-                StoryBlock(edition.stories, typography)
-                CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography)
+                BriefingBlock(edition.briefing, typography, lightEdit)
+                StoryBlock(edition.stories, typography, lightEdit)
+                CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography, lightEdit)
                 TaskBlock(
                     tasks = edition.tasks,
                     taskSaved = taskSaved,
@@ -378,6 +403,7 @@ private fun WideEditionBody(
     calendarPermissionOff: Boolean,
     onOpenCalendarPermission: () -> Unit,
     readOnly: Boolean,
+    lightEdit: LightEditHooks?,
     typography: MatutineEditionTypography,
 ) {
     Spacer(Modifier.height(8.dp))
@@ -389,8 +415,8 @@ private fun WideEditionBody(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            BriefingBlock(edition.briefing, typography)
-            StoryBlockTwoColumns(edition.stories, typography)
+            BriefingBlock(edition.briefing, typography, lightEdit)
+            StoryBlockTwoColumns(edition.stories, typography, lightEdit)
         }
         VerticalDivider(
             modifier = Modifier.fillMaxHeight(),
@@ -401,7 +427,7 @@ private fun WideEditionBody(
             modifier = Modifier.width(EditionRailWidth),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography)
+            CalendarBlock(edition.events, calendarPermissionOff, onOpenCalendarPermission, typography, lightEdit)
             TaskBlock(
                 tasks = edition.tasks,
                 taskSaved = taskSaved,
@@ -415,29 +441,79 @@ private fun WideEditionBody(
 }
 
 @Composable
-private fun Masthead(name: String, dateLine: String, typography: MatutineEditionTypography) {
+private fun LightEditStatusRow(lightEdit: LightEditHooks, typography: MatutineEditionTypography) {
+    if (lightEdit.error != null) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = lightEdit.error,
+                style = typography.body.copy(color = EditionThemeColors.current.error),
+            )
+            TextButton(
+                onClick = lightEdit.onDiscard,
+                modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                colors = ButtonDefaults.textButtonColors(contentColor = EditionThemeColors.current.ink),
+            ) {
+                Text(text = "Discard", style = typography.body.copy(color = EditionThemeColors.current.ink))
+            }
+        }
+    } else if (lightEdit.saved) {
+        Text(text = EditionTranscript.SAVED, style = typography.meta)
+    }
+}
+
+@Composable
+private fun Masthead(
+    name: String,
+    dateLine: String,
+    typography: MatutineEditionTypography,
+    lightEdit: LightEditHooks?,
+) {
     val density = LocalDensity.current
     val accent = EditionThemeColors.current.accent
+    val resetKey = lightEdit?.resetKey ?: 0
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = name,
-            style = typography.masthead,
-            modifier = Modifier.drawBehind {
-                val accentThickness = with(density) { 2.dp.toPx() }
-                val y = size.height
-                drawLine(
-                    color = accent,
-                    start = Offset(0f, y),
-                    end = Offset(size.width, y),
-                    strokeWidth = accentThickness,
-                )
-            },
-        )
-        if (dateLine.isNotBlank()) {
-            Text(
-                text = dateLine,
-                style = typography.meta,
+        val mastheadModifier = Modifier.drawBehind {
+            val accentThickness = with(density) { 2.dp.toPx() }
+            val y = size.height
+            drawLine(
+                color = accent,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = accentThickness,
             )
+        }
+        if (lightEdit != null) {
+            LightEditLine(
+                text = name,
+                style = typography.masthead,
+                resetKey = resetKey,
+                modifier = mastheadModifier,
+                onCommit = { lightEdit.onCommit(LightEditField.Masthead, it) },
+            )
+        } else {
+            Text(
+                text = name,
+                style = typography.masthead,
+                modifier = mastheadModifier,
+            )
+        }
+        if (dateLine.isNotBlank() || lightEdit != null) {
+            if (lightEdit != null) {
+                LightEditLine(
+                    text = dateLine,
+                    style = typography.meta,
+                    resetKey = resetKey,
+                    onCommit = { lightEdit.onCommit(LightEditField.DateLine, it) },
+                )
+            } else {
+                Text(
+                    text = dateLine,
+                    style = typography.meta,
+                )
+            }
         }
         HorizontalDivider(
             thickness = 1.dp,
@@ -447,24 +523,42 @@ private fun Masthead(name: String, dateLine: String, typography: MatutineEdition
 }
 
 @Composable
-private fun BriefingBlock(briefing: String, typography: MatutineEditionTypography) {
+private fun BriefingBlock(briefing: String, typography: MatutineEditionTypography, lightEdit: LightEditHooks?) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionLabel("Briefing", typography)
-        Text(text = briefing, style = typography.briefing)
+        if (lightEdit != null) {
+            LightEditLine(
+                text = briefing,
+                style = typography.briefing,
+                resetKey = lightEdit.resetKey,
+                singleLine = false,
+                onCommit = { lightEdit.onCommit(LightEditField.Briefing, it) },
+            )
+        } else {
+            Text(text = briefing, style = typography.briefing)
+        }
     }
 }
 
 @Composable
-private fun StoryBlock(stories: List<EditionStory>, typography: MatutineEditionTypography) {
+private fun StoryBlock(
+    stories: List<EditionStory>,
+    typography: MatutineEditionTypography,
+    lightEdit: LightEditHooks?,
+) {
     if (stories.isEmpty()) {
         Text(text = EditionCopy.NO_STORIES, style = typography.body)
         return
     }
-    StoryColumn(stories, typography)
+    StoryColumn(stories, typography, lightEdit)
 }
 
 @Composable
-private fun StoryBlockTwoColumns(stories: List<EditionStory>, typography: MatutineEditionTypography) {
+private fun StoryBlockTwoColumns(
+    stories: List<EditionStory>,
+    typography: MatutineEditionTypography,
+    lightEdit: LightEditHooks?,
+) {
     if (stories.isEmpty()) {
         Text(text = EditionCopy.NO_STORIES, style = typography.body)
         return
@@ -475,16 +569,21 @@ private fun StoryBlockTwoColumns(stories: List<EditionStory>, typography: Matuti
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            StoryColumn(left, typography)
+            StoryColumn(left, typography, lightEdit, storyOffset = 0)
         }
         Column(modifier = Modifier.weight(1f)) {
-            StoryColumn(right, typography)
+            StoryColumn(right, typography, lightEdit, storyOffset = left.size)
         }
     }
 }
 
 @Composable
-private fun StoryColumn(stories: List<EditionStory>, typography: MatutineEditionTypography) {
+private fun StoryColumn(
+    stories: List<EditionStory>,
+    typography: MatutineEditionTypography,
+    lightEdit: LightEditHooks?,
+    storyOffset: Int = 0,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
         if (stories.isEmpty()) {
             return
@@ -495,13 +594,18 @@ private fun StoryColumn(stories: List<EditionStory>, typography: MatutineEdition
                 HairlineDivider()
                 Spacer(Modifier.height(12.dp))
             }
-            StoryRow(story, typography)
+            StoryRow(story, typography, lightEdit, storyOffset + index)
         }
     }
 }
 
 @Composable
-private fun StoryRow(story: EditionStory, typography: MatutineEditionTypography) {
+private fun StoryRow(
+    story: EditionStory,
+    typography: MatutineEditionTypography,
+    lightEdit: LightEditHooks?,
+    storyIndex: Int,
+) {
     val headlineStyle = when (story.rank) {
         StoryRank.lead -> typography.leadCompact
         StoryRank.secondary -> typography.story
@@ -513,20 +617,50 @@ private fun StoryRow(story: EditionStory, typography: MatutineEditionTypography)
     } else {
         Modifier
     }
+    val openStory = lightEdit == null && story.sourceUrl.isNotBlank()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .then(touchTarget)
-            .clickable { openUrl(story.sourceUrl) }
-            .semantics { contentDescription = accessible },
+            .then(
+                if (openStory) {
+                    Modifier
+                        .clickable { openUrl(story.sourceUrl) }
+                        .semantics { contentDescription = accessible }
+                } else {
+                    Modifier
+                },
+            ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(text = story.headline, style = headlineStyle)
-        Text(
-            text = story.sourceName,
-            style = typography.meta,
-        )
-        Text(text = story.deck, style = typography.body)
+        if (lightEdit != null) {
+            LightEditLine(
+                text = story.headline,
+                style = headlineStyle,
+                resetKey = lightEdit.resetKey,
+                onCommit = { lightEdit.onCommit(LightEditField.StoryHeadline(storyIndex), it) },
+            )
+            LightEditLine(
+                text = story.sourceName,
+                style = typography.meta,
+                resetKey = lightEdit.resetKey,
+                onCommit = { lightEdit.onCommit(LightEditField.StorySource(storyIndex), it) },
+            )
+            LightEditLine(
+                text = story.deck,
+                style = typography.body,
+                resetKey = lightEdit.resetKey,
+                singleLine = false,
+                onCommit = { lightEdit.onCommit(LightEditField.StoryDeck(storyIndex), it) },
+            )
+        } else {
+            Text(text = story.headline, style = headlineStyle)
+            Text(
+                text = story.sourceName,
+                style = typography.meta,
+            )
+            Text(text = story.deck, style = typography.body)
+        }
     }
 }
 
@@ -536,6 +670,7 @@ private fun CalendarBlock(
     calendarPermissionOff: Boolean,
     onOpenCalendarPermission: () -> Unit,
     typography: MatutineEditionTypography,
+    lightEdit: LightEditHooks?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionLabel("Calendar", typography)
@@ -561,8 +696,23 @@ private fun CalendarBlock(
                     Spacer(Modifier.height(8.dp))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(text = event.title, style = typography.body)
-                    Text(text = event.timeLabel, style = typography.meta)
+                    if (lightEdit != null) {
+                        LightEditLine(
+                            text = event.title,
+                            style = typography.body,
+                            resetKey = lightEdit.resetKey,
+                            onCommit = { lightEdit.onCommit(LightEditField.EventTitle(index), it) },
+                        )
+                        LightEditLine(
+                            text = event.timeLabel,
+                            style = typography.meta,
+                            resetKey = lightEdit.resetKey,
+                            onCommit = { lightEdit.onCommit(LightEditField.EventTime(index), it) },
+                        )
+                    } else {
+                        Text(text = event.title, style = typography.body)
+                        Text(text = event.timeLabel, style = typography.meta)
+                    }
                 }
             }
         }

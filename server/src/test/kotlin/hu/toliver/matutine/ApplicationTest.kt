@@ -10,14 +10,23 @@ import hu.toliver.matutine.edition.EditionTranscript
 import hu.toliver.matutine.edition.FEED_DIDNT_LOAD
 import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.SourceList
+import hu.toliver.matutine.edition.StoryRank
 import hu.toliver.matutine.edition.decodeEdition
+import hu.toliver.matutine.edition.encodeEdition
 import hu.toliver.matutine.edition.decodeReaderSettings
 import hu.toliver.matutine.edition.parseNotificationTime
 import hu.toliver.matutine.edition.todayLocalDate
 import hu.toliver.matutine.edition.toDayKey
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import hu.toliver.matutine.edition.DEFAULT_AI_PROVIDER
+import hu.toliver.matutine.edition.ServerProcessConfig
+import hu.toliver.matutine.edition.encodeServerProcessConfig
+import hu.toliver.matutine.edition.encodeSourceList
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import java.io.File
@@ -60,9 +69,11 @@ class ApplicationTest {
 
     @Test
     fun setToken_rejectsEveryOtherBearerBeforeReadingDocuments() = testApplication {
-        val store = TouchingStore()
+        val root = Files.createTempDirectory("matutine-auth").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
         application {
             installTestDocuments(resolveSharedToken("lan-secret"), store)
+            attributes.put(GenerationRawKey, "morning")
             module()
         }
         val missing = client.get("/editions/current")
@@ -77,7 +88,8 @@ class ApplicationTest {
         assertEquals(HttpStatusCode.Unauthorized, wrongToken.status)
         assertFalse(missing.bodyAsText().contains("isSample"))
         assertFalse(wrongToken.bodyAsText().contains("mastheadName"))
-        assertEquals(0, store.touches)
+        assertFalse(root.resolve("sources.json").exists())
+        assertFalse(File(root, "editions").exists())
     }
 
     @Test
@@ -119,6 +131,49 @@ class ApplicationTest {
         )
         assertEquals(edition.id, again.id)
         assertEquals(edition.revision, again.revision)
+    }
+
+    @Test
+    fun putEditionById_persistsLightEdit() = testApplication {
+        val root = Files.createTempDirectory("matutine-put").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        val day = todayLocalDate()
+        val morning = Edition(
+            id = "morning-${day.toDayKey()}",
+            revision = 4,
+            dayKey = day.toDayKey(),
+            role = EditionRole.morning,
+            mastheadName = "Matutine",
+            dateLine = "Kept date",
+            isSample = false,
+            briefing = "Kept by hand",
+            stories = emptyList(),
+            events = listOf(hu.toliver.matutine.edition.EditionEvent("Standup", "09:00")),
+            tasks = emptyList(),
+        )
+        store.saveMorningEdition(morning)
+        application {
+            installTestDocuments("matutine-demo", store)
+            module()
+        }
+        val edited = morning.copy(
+            events = listOf(hu.toliver.matutine.edition.EditionEvent("Daily sync", "09:00")),
+        )
+        val response = client.put("/editions/by-id") {
+            header("Authorization", "Bearer matutine-demo")
+            setBody(encodeEdition(edited))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val saved = decodeEdition(response.bodyAsText())
+        assertEquals("Daily sync", saved.events.first().title)
+        assertEquals(morning.revision + 1, saved.revision)
+        assertEquals(morning.dayKey, saved.dayKey)
+        val reloaded = decodeEdition(
+            client.get("/editions/current") {
+                header("Authorization", "Bearer matutine-demo")
+            }.bodyAsText(),
+        )
+        assertEquals("Daily sync", reloaded.events.first().title)
     }
 
     @Test
@@ -320,6 +375,108 @@ class ApplicationTest {
     }
 
     @Test
+    fun badFeed_keepsThePreviousSourceList() = testApplication {
+        val root = Files.createTempDirectory("matutine-bad-feed").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        store.writeSourceList(SourceList(feeds = listOf("https://example.com/good.xml")))
+        application {
+            installTestDocuments("matutine-demo", store)
+            module()
+        }
+        val before = root.resolve("sources.json").readText()
+        val response = client.put("/sources") {
+            header("Authorization", "Bearer matutine-demo")
+            header("Content-Type", "application/json")
+            setBody(encodeSourceList(SourceList(feeds = listOf("https://example.com/bad.xml"))))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals(FEED_DIDNT_LOAD, response.bodyAsText())
+        assertEquals(before, root.resolve("sources.json").readText())
+    }
+
+    @Test
+    fun putSources_createsTheListWhenAbsent() = testApplication {
+        val root = Files.createTempDirectory("matutine-create-list").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        application {
+            installTestDocuments("matutine-demo", store)
+            installServerClock(
+                zone = TimeZone.UTC,
+                generationTime = "07:00",
+                clock = { DUE },
+                readFeed = { PERSONAL_RSS },
+            )
+            module()
+        }
+        val response = client.put("/sources") {
+            header("Authorization", "Bearer matutine-demo")
+            header("Content-Type", "application/json")
+            setBody(encodeSourceList(SourceList(feeds = listOf("https://example.com/rss.xml"))))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(root.resolve("sources.json").exists())
+    }
+
+    @Test
+    fun regenerateFromAdmin_buildsAPersonalEdition() = testApplication {
+        val root = Files.createTempDirectory("matutine-regenerate").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        store.writeSourceList(SourceList(feeds = listOf("https://example.com/rss.xml")))
+        store.writeSettings(ReaderSettings(topics = listOf("Technology", "Markets")))
+        application {
+            installTestDocuments("matutine-demo", store)
+            installServerClock(
+                zone = TimeZone.UTC,
+                generationTime = "07:00",
+                clock = { DUE },
+                readFeed = { PERSONAL_RSS },
+            )
+            module()
+        }
+        val response = client.post("/editions/morning/regenerate") {
+            header("Authorization", "Bearer matutine-demo")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val edition = decodeEdition(response.bodyAsText())
+        assertFalse(edition.isSample)
+        assertFalse(EditionTranscript.render(edition).contains(EditionTranscript.SAMPLE))
+        assertTrue(edition.briefing.contains("Summary assembled from headlines."))
+        assertEquals(StoryRank.lead, edition.stories.first().rank)
+    }
+
+    @Test
+    fun processConfig_roundTripsThroughAdminApi() = testApplication {
+        val root = Files.createTempDirectory("matutine-process").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        application {
+            installTestDocuments("matutine-demo", store)
+            module()
+        }
+        val body = encodeServerProcessConfig(
+            ServerProcessConfig(
+                sharedToken = "lan-secret",
+                timezone = KIRITIMATI,
+                generationTime = "08:15",
+                aiProvider = DEFAULT_AI_PROVIDER,
+            ),
+        )
+        val put = client.put("/process") {
+            header("Authorization", "Bearer matutine-demo")
+            header("Content-Type", "application/json")
+            setBody(body)
+        }
+        assertEquals(HttpStatusCode.OK, put.status)
+        val get = client.get("/process") {
+            header("Authorization", "Bearer lan-secret")
+        }
+        assertEquals(HttpStatusCode.OK, get.status)
+        val config = hu.toliver.matutine.edition.decodeServerProcessConfig(get.bodyAsText())
+        assertEquals("lan-secret", config.sharedToken)
+        assertEquals(KIRITIMATI, config.timezone)
+        assertEquals("08:15", config.generationTime)
+    }
+
+    @Test
     fun runningServer_insertsOnTheGenerationMinute() = testApplication {
         val root = Files.createTempDirectory("matutine-running").toFile()
         val store = DataDirectoryStore(root.absolutePath)
@@ -417,4 +574,7 @@ private class TouchingStore : EditionStore {
     override fun writeCalendarSnapshot(snapshot: CalendarSnapshot) = touch()
     override fun readCalDavAccount() = touch()
     override fun writeCalDavAccount(account: hu.toliver.matutine.edition.CalDavAccount) = touch()
+    override fun readProcessConfig(): hu.toliver.matutine.edition.ServerProcessConfig? = null
+
+    override fun writeProcessConfig(config: hu.toliver.matutine.edition.ServerProcessConfig) = touch()
 }

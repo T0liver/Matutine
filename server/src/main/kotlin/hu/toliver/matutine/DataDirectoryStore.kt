@@ -6,7 +6,10 @@ import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.EditionRole
 import hu.toliver.matutine.edition.EditionStore
 import hu.toliver.matutine.edition.ReaderSettings
+import hu.toliver.matutine.edition.ServerProcessConfig
 import hu.toliver.matutine.edition.SourceList
+import hu.toliver.matutine.edition.decodeServerProcessConfig
+import hu.toliver.matutine.edition.encodeServerProcessConfig
 import hu.toliver.matutine.edition.decodeCalDavAccount
 import hu.toliver.matutine.edition.decodeCalendarSnapshot
 import hu.toliver.matutine.edition.decodeEdition
@@ -80,6 +83,13 @@ class DataDirectoryStore(
 
     override fun writeCalDavAccount(account: CalDavAccount) {
         write("caldav.json", encodeCalDavAccount(account))
+    }
+
+    override fun readProcessConfig(): ServerProcessConfig? =
+        read("process.json", ::decodeServerProcessConfig)
+
+    override fun writeProcessConfig(config: ServerProcessConfig) {
+        write("process.json", encodeServerProcessConfig(config))
     }
 
     private fun <T> read(relativePath: String, decode: (String) -> T): T? {

@@ -28,6 +28,11 @@ interface EditionStore {
     fun readCalDavAccount(): CalDavAccount?
 
     fun writeCalDavAccount(account: CalDavAccount)
+
+    /** Null when the process document is absent. */
+    fun readProcessConfig(): ServerProcessConfig?
+
+    fun writeProcessConfig(config: ServerProcessConfig)
 }
 
 class LocalEditionRepository(

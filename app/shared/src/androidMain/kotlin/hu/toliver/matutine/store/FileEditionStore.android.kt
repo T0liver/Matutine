@@ -6,7 +6,10 @@ import hu.toliver.matutine.edition.CalendarSnapshot
 import hu.toliver.matutine.edition.Edition
 import hu.toliver.matutine.edition.EditionRole
 import hu.toliver.matutine.edition.ReaderSettings
+import hu.toliver.matutine.edition.ServerProcessConfig
 import hu.toliver.matutine.edition.SourceList
+import hu.toliver.matutine.edition.decodeServerProcessConfig
+import hu.toliver.matutine.edition.encodeServerProcessConfig
 import hu.toliver.matutine.edition.decodeCalDavAccount
 import hu.toliver.matutine.edition.decodeCalendarSnapshot
 import hu.toliver.matutine.edition.decodeEdition
@@ -99,6 +102,16 @@ actual class FileEditionStore actual constructor(
 
     override fun writeCalDavAccount(account: CalDavAccount) {
         File(root, "caldav.json").writeText(encodeCalDavAccount(account))
+    }
+
+    override fun readProcessConfig(): ServerProcessConfig? {
+        val file = File(root, "process.json")
+        if (!file.exists()) return null
+        return decodeServerProcessConfig(file.readText())
+    }
+
+    override fun writeProcessConfig(config: ServerProcessConfig) {
+        File(root, "process.json").writeText(encodeServerProcessConfig(config))
     }
 }
 

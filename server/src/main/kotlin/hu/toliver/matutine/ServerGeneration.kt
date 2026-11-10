@@ -23,6 +23,7 @@ internal fun serverEditionRepository(
     clock: () -> Instant,
     geminiKey: String,
     readFeed: suspend (String) -> String,
+    readCalDav: suspend (hu.toliver.matutine.edition.CalDavAccount) -> String = ::serverReadCalDav,
     summarize: suspend (List<EditionStory>, String) -> String,
 ): LocalEditionRepository {
     val trimmed = geminiKey.trim()
@@ -32,6 +33,7 @@ internal fun serverEditionRepository(
         today = { clock().toLocalDateTime(zone).date },
         timeZone = zone,
         readFeed = readFeed,
+        readCalDav = readCalDav,
         summarize = summarize,
     )
 }
