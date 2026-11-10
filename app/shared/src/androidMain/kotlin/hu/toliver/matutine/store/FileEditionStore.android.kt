@@ -62,6 +62,25 @@ actual class FileEditionStore actual constructor(
         file.writeText(encodeEdition(edition))
     }
 
+    override fun loadExtras(dayKey: String): List<Edition> {
+        val dir = File(root, "editions")
+        if (!dir.exists()) return emptyList()
+        val prefix = "extra-$dayKey-"
+        return dir.listFiles().orEmpty()
+            .filter { it.isFile && it.name.startsWith(prefix) && it.name.endsWith(".json") }
+            .map { decodeEdition(it.readText()) }
+            .filter { it.role == EditionRole.extra && it.dayKey == dayKey }
+            .sortedBy { it.id.substringAfterLast("-").toIntOrNull() ?: 0 }
+    }
+
+    override fun saveExtra(edition: Edition) {
+        require(edition.role == EditionRole.extra)
+        require(edition.id.startsWith("extra-${edition.dayKey}-"))
+        val dir = File(root, "editions")
+        dir.mkdirs()
+        File(dir, "${edition.id}.json").writeText(encodeEdition(edition))
+    }
+
     override fun readCalendarSnapshot(): CalendarSnapshot? {
         val file = File(root, "calendar-snapshot.json")
         if (!file.exists()) return null

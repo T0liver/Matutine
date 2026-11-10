@@ -26,6 +26,7 @@ data class ReaderSettings(
     val notificationBody: String = EDITION_READY_NOTIFICATION_BODY,
     val editionTheme: String = DEFAULT_EDITION_THEME,
     val editionLayout: String = DEFAULT_EDITION_LAYOUT,
+    val geminiKey: String = "",
 )
 
 fun ReaderSettings.resolvedNotificationTime(): String =

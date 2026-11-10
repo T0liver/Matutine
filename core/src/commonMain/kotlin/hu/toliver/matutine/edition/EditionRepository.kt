@@ -16,6 +16,8 @@ interface EditionStore {
 
     fun loadMorningEdition(dayKey: String): Edition?
     fun saveMorningEdition(edition: Edition)
+    fun loadExtras(dayKey: String): List<Edition>
+    fun saveExtra(edition: Edition)
 
     /** Null when the snapshot document is absent. */
     fun readCalendarSnapshot(): CalendarSnapshot?
@@ -39,6 +41,7 @@ class LocalEditionRepository(
     private val readDeviceCalendar: suspend (LocalDate) -> DeviceCalendarRead = { DeviceCalendarRead.Unavailable },
     private val readCalDav: suspend (CalDavAccount) -> String = { error(CALDAV_DIDNT_LOAD) },
     private val serverConfigured: Boolean = false,
+    private val summarize: suspend (List<EditionStory>, String) -> String = { _, _ -> error("summarizer_unavailable") },
 ) : EditionRepository {
     override suspend fun loadCurrentMorningEdition(): Result<Edition> = runCatching {
         val dayKey = today().toDayKey()
@@ -121,6 +124,15 @@ class LocalEditionRepository(
             return@runCatching
         }
         store.writeSettings(current.copy(editionTheme = normalized))
+    }
+
+    override fun savedGeminiKey(): String = store.readSettings()?.geminiKey?.trim().orEmpty()
+
+    override fun saveGeminiKey(key: String): Result<Unit> = runCatching {
+        val normalized = key.trim()
+        val current = store.readSettings() ?: ReaderSettings()
+        if (current.geminiKey == normalized) return@runCatching
+        store.writeSettings(current.copy(geminiKey = normalized))
     }
 
     override fun saveEditionLayout(layoutId: String): Result<Unit> = runCatching {
@@ -261,12 +273,85 @@ class LocalEditionRepository(
         } else {
             edition.copy(sourceNotes = edition.sourceNotes + calDav.notes)
         }
+        val next = if (replaceExisting && existing != null && !existing.isSample) {
+            keepMorningEdits(existing, noted)
+        } else {
+            withModelBriefing(noted)
+        }
         if (!replaceExisting) {
             val current = store.loadMorningEdition(date.toDayKey())
             if (current != null) return current
         }
-        store.saveMorningEdition(noted)
-        return noted
+        store.saveMorningEdition(next)
+        return next
+    }
+
+    override suspend fun newEditionNow(): Result<Edition> = runCatching {
+        val date = today()
+        val dayKey = date.toDayKey()
+        if (store.loadMorningEdition(dayKey) == null) error(MORNING_EDITION_NOT_READY)
+        val list = store.readSourceList()
+        if (list == null || list.feeds.isEmpty()) error(FEED_DIDNT_LOAD)
+        val parsed = list.feeds.map { url ->
+            runCatching { parseFeedDocument(readDocument(url)) }
+        }
+        if (parsed.none { it.isSuccess }) error(FEED_DIDNT_LOAD)
+        recordDeviceCalendar(date)
+        val calDav = readCalDavOccurrences()
+        val events = editionEventsFrom(
+            sources = listOf(
+                readIcsOccurrences(list),
+                store.readCalendarSnapshot()?.occurrences.orEmpty(),
+                calDav.occurrences,
+            ),
+            day = date,
+            zone = timeZone,
+        )
+        val edition = EditionGenerator.fromFeedResults(
+            date = date,
+            parsed = parsed,
+            existing = null,
+            topics = store.readSettings()?.topics.orEmpty(),
+            events = events,
+        )
+        val noted = if (calDav.notes.isEmpty()) {
+            edition
+        } else {
+            edition.copy(sourceNotes = edition.sourceNotes + calDav.notes)
+        }
+        val extra = withModelBriefing(noted).copy(
+            id = nextExtraId(dayKey),
+            revision = 1,
+            role = EditionRole.extra,
+        )
+        store.saveExtra(extra)
+        extra
+    }
+
+    override suspend fun loadSameDayExtras(): List<Edition> =
+        store.loadExtras(today().toDayKey())
+
+    override suspend fun updateExtra(edition: Edition): Result<Edition> = runCatching {
+        val dayKey = today().toDayKey()
+        require(edition.dayKey == dayKey && edition.role == EditionRole.extra)
+        val stored = store.loadExtras(dayKey).singleOrNull { it.id == edition.id }
+            ?: error(MORNING_EDITION_NOT_READY)
+        val next = edition.copy(
+            id = stored.id,
+            revision = stored.revision + 1,
+            dayKey = stored.dayKey,
+            role = EditionRole.extra,
+        )
+        store.saveExtra(next)
+        next
+    }
+
+    private fun nextExtraId(dayKey: String): String {
+        val prefix = "extra-$dayKey-"
+        val used = store.loadExtras(dayKey).mapNotNull { extra ->
+            extra.id.removePrefix(prefix).toIntOrNull()
+        }
+        return prefix + ((used.maxOrNull() ?: 0) + 1)
     }
 
     override fun savedCalDavAccount(): CalDavAccount? =
@@ -322,6 +407,19 @@ class LocalEditionRepository(
             rethrowCancellation(error)
             error(FEED_DIDNT_LOAD)
         }
+
+    private suspend fun withModelBriefing(edition: Edition): Edition {
+        val key = savedGeminiKey()
+        if (key.isEmpty() || edition.stories.isEmpty()) return edition
+        val text = try {
+            summarize(edition.stories, key).trim()
+        } catch (error: Throwable) {
+            rethrowCancellation(error)
+            return edition
+        }
+        if (text.isEmpty()) return edition
+        return edition.copy(briefing = text)
+    }
 }
 
 private data class CalDavRead(
@@ -352,6 +450,21 @@ interface EditionRepository {
     fun saveEditionTheme(themeId: String): Result<Unit>
     fun savedEditionLayout(): String
     fun saveEditionLayout(layoutId: String): Result<Unit>
+    fun savedGeminiKey(): String
+    fun saveGeminiKey(key: String): Result<Unit>
     suspend fun generateToday(): Result<Edition>
+    suspend fun newEditionNow(): Result<Edition>
+    suspend fun loadSameDayExtras(): List<Edition>
     suspend fun updateMorningEdition(edition: Edition): Result<Edition>
+    suspend fun updateExtra(edition: Edition): Result<Edition>
+}
+
+internal fun keepMorningEdits(existing: Edition, generated: Edition): Edition {
+    val freshKeys = generated.events.map { it.title to it.timeLabel }.toSet()
+    val keptLines = existing.events.filter { (it.title to it.timeLabel) !in freshKeys }
+    return generated.copy(
+        briefing = existing.briefing,
+        events = generated.events + keptLines,
+        tasks = existing.tasks,
+    )
 }

@@ -32,6 +32,7 @@ class ReaderSettingsTest {
         assertEquals(EDITION_READY_NOTIFICATION_BODY, settings.resolvedNotificationBody())
         assertEquals(DEFAULT_EDITION_THEME, settings.resolvedEditionTheme())
         assertEquals(DEFAULT_EDITION_LAYOUT, settings.resolvedEditionLayout())
+        assertEquals("", settings.geminiKey)
     }
 
     @Test

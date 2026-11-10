@@ -21,6 +21,10 @@ actual class FileEditionStore actual constructor(
 
     override fun saveMorningEdition(edition: Edition) = Unit
 
+    override fun loadExtras(dayKey: String): List<Edition> = emptyList()
+
+    override fun saveExtra(edition: Edition) = Unit
+
     override fun readCalendarSnapshot(): CalendarSnapshot? = null
 
     override fun writeCalendarSnapshot(snapshot: CalendarSnapshot) = Unit

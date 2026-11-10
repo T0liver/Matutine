@@ -170,7 +170,15 @@ class EditionTypewriterStateTest {
 
         override fun saveEditionLayout(layoutId: String): Result<Unit> = Result.success(Unit)
 
+        override fun savedGeminiKey(): String = ""
+
+        override fun saveGeminiKey(key: String): Result<Unit> = Result.success(Unit)
+
         override suspend fun generateToday(): Result<Edition> = Result.success(morning)
+
+        override suspend fun newEditionNow(): Result<Edition> = Result.success(morning)
+
+        override suspend fun loadSameDayExtras(): List<Edition> = emptyList()
 
         override suspend fun updateMorningEdition(edition: Edition): Result<Edition> {
             gate?.await()
@@ -180,5 +188,7 @@ class EditionTypewriterStateTest {
             morning = next
             return Result.success(next)
         }
+
+        override suspend fun updateExtra(edition: Edition): Result<Edition> = Result.success(edition)
     }
 }

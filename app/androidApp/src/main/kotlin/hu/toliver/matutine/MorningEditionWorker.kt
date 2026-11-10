@@ -11,6 +11,7 @@ import hu.toliver.matutine.edition.LocalEditionRepository
 import hu.toliver.matutine.edition.readCalDavCalendar
 import hu.toliver.matutine.edition.readDeviceCalendar
 import hu.toliver.matutine.edition.readFeedDocument
+import hu.toliver.matutine.edition.summarizeWithGemini
 import hu.toliver.matutine.edition.writesDeviceCalendarSnapshot
 import hu.toliver.matutine.store.FileEditionStore
 import hu.toliver.matutine.store.androidDataRoot
@@ -65,4 +66,5 @@ private fun morningRepository(context: Context) = LocalEditionRepository(
     writesDeviceCalendarSnapshot = writesDeviceCalendarSnapshot(),
     readDeviceCalendar = { day -> readDeviceCalendar(context, day) },
     readCalDav = ::readCalDavCalendar,
+    summarize = ::summarizeWithGemini,
 )

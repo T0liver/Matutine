@@ -68,6 +68,10 @@ fun EditionScreen(
     onOpenCalendarPermission: () -> Unit = {},
     editionLayoutId: String = DEFAULT_EDITION_LAYOUT,
     onOpenTypewriter: (() -> Unit)? = null,
+    sameDayExtras: List<Edition> = emptyList(),
+    onNewEditionNow: () -> Unit = {},
+    onOpenExtra: (String) -> Unit = {},
+    onOpenMorning: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val typography = LocalMatutineEditionTypography.current
@@ -96,6 +100,10 @@ fun EditionScreen(
             onOpenCalendarPermission = onOpenCalendarPermission,
             editionLayoutId = editionLayoutId,
             onOpenTypewriter = onOpenTypewriter,
+            sameDayExtras = sameDayExtras,
+            onNewEditionNow = onNewEditionNow,
+            onOpenExtra = onOpenExtra,
+            onOpenMorning = onOpenMorning,
             typography = typography,
             modifier = modifier,
         )
@@ -217,6 +225,10 @@ private fun EditionContent(
     onOpenCalendarPermission: () -> Unit,
     editionLayoutId: String,
     onOpenTypewriter: (() -> Unit)?,
+    sameDayExtras: List<Edition>,
+    onNewEditionNow: () -> Unit,
+    onOpenExtra: (String) -> Unit,
+    onOpenMorning: () -> Unit,
     typography: MatutineEditionTypography,
     modifier: Modifier = Modifier,
 ) {
@@ -253,6 +265,34 @@ private fun EditionContent(
                     ) {
                         Text(text = "Typewriter", style = typography.body.copy(color = EditionThemeColors.current.ink))
                     }
+                }
+                TextButton(
+                    onClick = onNewEditionNow,
+                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                ) {
+                    Text(text = "New edition now", style = typography.body.copy(color = EditionThemeColors.current.ink))
+                }
+            }
+            if (edition.role == EditionRole.extra) {
+                TextButton(
+                    onClick = onOpenMorning,
+                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                ) {
+                    Text(
+                        text = "Today's morning edition",
+                        style = typography.body.copy(color = EditionThemeColors.current.ink),
+                    )
+                }
+            }
+            sameDayExtras.forEach { extra ->
+                TextButton(
+                    onClick = { onOpenExtra(extra.id) },
+                    modifier = Modifier.heightIn(min = chromeControlMinHeight()),
+                ) {
+                    Text(
+                        text = sameDayExtraLabel(extra),
+                        style = typography.body.copy(color = EditionThemeColors.current.ink),
+                    )
                 }
             }
             Masthead(edition.mastheadName, edition.dateLine, typography)

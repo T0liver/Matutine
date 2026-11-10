@@ -56,6 +56,9 @@ fun SettingsScreen(
     onCalDavPasswordChange: (String) -> Unit,
     calDavError: String?,
     onSaveCalDav: () -> Unit,
+    geminiKey: String,
+    onGeminiKeyChange: (String) -> Unit,
+    onSaveGeminiKey: () -> Unit,
     onOpenInterests: () -> Unit,
     onGenerate: () -> Unit,
     onBack: () -> Unit,
@@ -207,6 +210,23 @@ fun SettingsScreen(
                     style = typography.body.copy(color = NewsprintColors.error),
                 )
             }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = controlHeight),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = "Gemini key", style = typography.body.copy(color = NewsprintColors.ink))
+            newsprintField(
+                value = geminiKey,
+                onValueChange = onGeminiKeyChange,
+                isError = false,
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+                onDone = onSaveGeminiKey,
+                visualTransformation = PasswordVisualTransformation(),
+            )
         }
         if (notificationTime != null && onNotificationTimeChange != null && onSaveNotificationTime != null) {
             Column(

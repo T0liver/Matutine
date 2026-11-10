@@ -22,6 +22,7 @@ private class FakeStore(
 ) : EditionStore {
     var saved: Edition? = null
     var snapshotWrites: Int = 0
+    var failSettingsWrite: Boolean = false
 
     override fun readSourceList(): SourceList? = sourceList
 
@@ -32,6 +33,7 @@ private class FakeStore(
     override fun readSettings(): ReaderSettings? = settings
 
     override fun writeSettings(settings: ReaderSettings) {
+        if (failSettingsWrite) error("settings_unavailable")
         this.settings = settings
     }
 
@@ -41,6 +43,21 @@ private class FakeStore(
     override fun saveMorningEdition(edition: Edition) {
         morning = edition
         saved = edition
+    }
+
+    private val extras = mutableListOf<Edition>()
+
+    override fun loadExtras(dayKey: String): List<Edition> =
+        extras.filter { it.dayKey == dayKey && it.role == EditionRole.extra }
+
+    override fun saveExtra(edition: Edition) {
+        require(edition.role == EditionRole.extra)
+        val index = extras.indexOfFirst { it.id == edition.id }
+        if (index >= 0) extras[index] = edition else extras += edition
+    }
+
+    fun seedExtra(edition: Edition) {
+        extras += edition
     }
 
     override fun readCalendarSnapshot(): CalendarSnapshot? = snapshot
@@ -426,6 +443,148 @@ class LocalEditionRepositoryTest {
         assertEquals(existing.id, edition.id)
         assertEquals(4, edition.revision)
         assertFalse(edition.isSample)
+    }
+
+    @Test
+    fun generate_again_keepsBriefingRewrittenLineAndTasks() = runBlocking {
+        val existing = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-${sampleDay.toDayKey()}",
+            revision = 3,
+            isSample = false,
+            briefing = "Kept by hand",
+            events = listOf(
+                EditionEvent("Planning", "9:30"),
+                EditionEvent("Team standup", "10:00"),
+            ),
+            tasks = listOf(
+                EditionTask("Buy milk", completed = true),
+                EditionTask("File notes"),
+            ),
+        )
+        val store = FakeStore(
+            morning = existing,
+            sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+            snapshot = CalendarSnapshot(
+                occurrences = listOf(
+                    CalendarOccurrence(title = "Planning", startEpochSecond = utc(9, 30), endEpochSecond = utc(10, 0)),
+                ),
+            ),
+        )
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            timeZone = TimeZone.UTC,
+            readFeed = { PERSONAL_RSS },
+        )
+
+        val edition = repo.generateToday().getOrThrow()
+
+        assertEquals(existing.id, edition.id)
+        assertEquals(4, edition.revision)
+        assertEquals("Kept by hand", edition.briefing)
+        assertEquals(existing.tasks, edition.tasks)
+        assertTrue(edition.events.contains(EditionEvent("Planning", "9:30")))
+        assertTrue(edition.events.contains(EditionEvent("Team standup", "10:00")))
+        assertEquals(1, edition.events.count { it == EditionEvent("Planning", "9:30") })
+        assertEquals(
+            listOf("Markets open higher", "Port reopens"),
+            edition.stories.map { it.headline },
+        )
+        assertEquals(StoryRank.lead, edition.stories.first().rank)
+    }
+
+    @Test
+    fun newEditionNow_insertsAnExtraAndLeavesOtherEditions() = runBlocking {
+        val morning = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-${sampleDay.toDayKey()}",
+            revision = 2,
+            isSample = false,
+            briefing = "Morning stays",
+        )
+        val older = morning.copy(
+            id = "extra-${sampleDay.toDayKey()}-1",
+            revision = 1,
+            role = EditionRole.extra,
+            briefing = "Older extra",
+        )
+        val store = FakeStore(
+            morning = morning,
+            sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+        )
+        store.seedExtra(older)
+        store.seedExtra(older.copy(id = "extra-2026-11-06-1", dayKey = "2026-11-06", briefing = "Yesterday"))
+        val repo = LocalEditionRepository(store, today = { sampleDay }, readFeed = { PERSONAL_RSS })
+
+        val extra = repo.newEditionNow().getOrThrow()
+
+        assertEquals(EditionRole.extra, extra.role)
+        assertEquals("extra-${sampleDay.toDayKey()}-2", extra.id)
+        assertEquals(1, extra.revision)
+        assertEquals(morning, store.loadMorningEdition(sampleDay.toDayKey()))
+        assertEquals(older, store.loadExtras(sampleDay.toDayKey()).first())
+        assertEquals(morning, repo.loadCurrentMorningEdition().getOrThrow())
+        assertEquals(listOf(older, extra), repo.loadSameDayExtras())
+        assertTrue(repo.loadSameDayExtras().none { it.dayKey != sampleDay.toDayKey() })
+    }
+
+    @Test
+    fun lateSnapshot_isOnRegenerateOrExtraAndNotOnThePaperBefore() = runBlocking {
+        val morning = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-${sampleDay.toDayKey()}",
+            revision = 1,
+            isSample = false,
+            events = listOf(EditionEvent("Kept", "8:00")),
+        )
+        val later = CalendarOccurrence(title = "Later", startEpochSecond = utc(15, 0), endEpochSecond = utc(16, 0))
+        val store = FakeStore(
+            morning = morning,
+            sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+            snapshot = CalendarSnapshot(occurrences = listOf(later)),
+        )
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            timeZone = TimeZone.UTC,
+            readFeed = { PERSONAL_RSS },
+        )
+
+        assertEquals(listOf(EditionEvent("Kept", "8:00")), repo.loadCurrentMorningEdition().getOrThrow().events)
+
+        val regenerated = repo.generateToday().getOrThrow()
+        assertTrue(regenerated.events.contains(EditionEvent("Later", "15:00")))
+        assertEquals(morning.id, regenerated.id)
+
+        val untouched = regenerated.copy(events = listOf(EditionEvent("Kept", "8:00")), revision = regenerated.revision)
+        store.saveMorningEdition(untouched)
+        val extra = repo.newEditionNow().getOrThrow()
+        assertEquals(untouched, store.loadMorningEdition(sampleDay.toDayKey()))
+        assertTrue(extra.events.contains(EditionEvent("Later", "15:00")))
+        assertFalse(extra.events.contains(EditionEvent("Kept", "8:00")))
+    }
+
+    @Test
+    fun failedGenerateAndExtra_leaveStoredEditions() = runBlocking {
+        val morning = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-${sampleDay.toDayKey()}",
+            revision = 2,
+            isSample = false,
+            briefing = "Still here",
+        )
+        val store = FakeStore(
+            morning = morning,
+            sourceList = SourceList(feeds = listOf("https://example.com/bad.xml")),
+        )
+        val repo = LocalEditionRepository(store, today = { sampleDay }, readFeed = { NOT_A_FEED })
+
+        val generated = repo.generateToday()
+        val extra = repo.newEditionNow()
+
+        assertTrue(generated.isFailure)
+        assertEquals(FEED_DIDNT_LOAD, generated.exceptionOrNull()?.message)
+        assertTrue(extra.isFailure)
+        assertEquals(FEED_DIDNT_LOAD, extra.exceptionOrNull()?.message)
+        assertEquals(morning, store.loadMorningEdition(sampleDay.toDayKey()))
+        assertTrue(store.loadExtras(sampleDay.toDayKey()).isEmpty())
     }
 
     @Test
@@ -1531,6 +1690,216 @@ class EditionTaskPersistenceTest {
         assertTrue(repo.updateMorningEdition(otherDay).isFailure)
         val otherId = morning.copy(id = "other")
         assertTrue(repo.updateMorningEdition(otherId).isFailure)
+    }
+
+    @Test
+    fun generate_withKey_storesOneModelBriefingOnANewMorning() = runBlocking {
+        var calls = 0
+        val store = FakeStore(
+            sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+            settings = ReaderSettings(geminiKey = "configured"),
+        )
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            readFeed = { PERSONAL_RSS },
+            summarize = { stories, key ->
+                calls += 1
+                assertEquals("configured", key)
+                assertEquals("Markets open higher", stories.first().headline)
+                "The harbor is quiet."
+            },
+        )
+
+        val edition = repo.generateToday().getOrThrow()
+
+        assertEquals("The harbor is quiet.", edition.briefing)
+        assertFalse(edition.briefing.contains("Summary assembled from headlines."))
+        assertFalse(edition.briefing.contains("gemini", ignoreCase = true))
+        assertEquals(1, calls)
+        assertFalse(edition.isSample)
+    }
+
+    @Test
+    fun generate_withKey_replacesASampleWithOneModelBriefing() = runBlocking {
+        var calls = 0
+        val store = FakeStore()
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            readFeed = { PERSONAL_RSS },
+            summarize = { _, _ ->
+                calls += 1
+                "A written opening."
+            },
+        )
+        val sample = repo.loadCurrentMorningEdition().getOrThrow()
+        assertTrue(sample.isSample)
+        assertEquals(0, calls)
+        store.writeSettings(ReaderSettings(geminiKey = "configured"))
+        repo.saveFeedUrl("https://example.com/rss.xml").getOrThrow()
+
+        val edition = repo.generateToday().getOrThrow()
+
+        assertEquals("A written opening.", edition.briefing)
+        assertFalse(edition.isSample)
+        assertEquals(1, calls)
+    }
+
+    @Test
+    fun generate_withoutKey_keepsTheExtractiveBriefingAndDoesNotCall() = runBlocking {
+        var calls = 0
+        listOf<ReaderSettings?>(null, ReaderSettings(geminiKey = "  ")).forEach { settings ->
+            val store = FakeStore(
+                sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+                settings = settings,
+            )
+            val repo = LocalEditionRepository(
+                store,
+                today = { sampleDay },
+                readFeed = { PERSONAL_RSS },
+                summarize = { _, _ ->
+                    calls += 1
+                    "Should not be stored."
+                },
+            )
+
+            val edition = repo.generateToday().getOrThrow()
+
+            assertTrue(edition.briefing.endsWith("Summary assembled from headlines."))
+            assertEquals(edition, store.saved)
+        }
+        assertEquals(0, calls)
+    }
+
+    @Test
+    fun generate_whenTheCallFailsOrIsBlank_keepsTheExtractiveBriefing() = runBlocking {
+        listOf<() -> String>({ error("summarizer_unavailable") }, { "  " }).forEach { result ->
+            var calls = 0
+            val store = FakeStore(
+                sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+                settings = ReaderSettings(geminiKey = "configured"),
+            )
+            val repo = LocalEditionRepository(
+                store,
+                today = { sampleDay },
+                readFeed = { PERSONAL_RSS },
+                summarize = { _, _ ->
+                    calls += 1
+                    result()
+                },
+            )
+
+            val edition = repo.generateToday().getOrThrow()
+
+            assertTrue(edition.briefing.endsWith("Summary assembled from headlines."))
+            assertEquals(1, calls)
+            assertEquals(edition, store.saved)
+        }
+    }
+
+    @Test
+    fun generate_again_withKey_keepsTheBriefingAndDoesNotCall() = runBlocking {
+        var calls = 0
+        val existing = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-${sampleDay.toDayKey()}",
+            revision = 3,
+            isSample = false,
+            briefing = "Kept by hand",
+        )
+        val store = FakeStore(
+            morning = existing,
+            sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+            settings = ReaderSettings(geminiKey = "configured"),
+        )
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            readFeed = { PERSONAL_RSS },
+            summarize = { _, _ ->
+                calls += 1
+                "A new opening."
+            },
+        )
+
+        val edition = repo.generateToday().getOrThrow()
+
+        assertEquals("Kept by hand", edition.briefing)
+        assertEquals(0, calls)
+    }
+
+    @Test
+    fun newEditionNow_withKey_storesOneModelBriefingOnTheExtra() = runBlocking {
+        var calls = 0
+        val morning = SampleGenerator.forDay(sampleDay).copy(
+            id = "morning-${sampleDay.toDayKey()}",
+            revision = 2,
+            isSample = false,
+            briefing = "Morning stays",
+        )
+        val store = FakeStore(
+            morning = morning,
+            sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
+            settings = ReaderSettings(geminiKey = "configured"),
+        )
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            readFeed = { PERSONAL_RSS },
+            summarize = { _, _ ->
+                calls += 1
+                "Extra opening."
+            },
+        )
+
+        val extra = repo.newEditionNow().getOrThrow()
+
+        assertEquals("Extra opening.", extra.briefing)
+        assertEquals(EditionRole.extra, extra.role)
+        assertEquals(1, calls)
+        assertEquals("Morning stays", repo.loadCurrentMorningEdition().getOrThrow().briefing)
+    }
+
+    @Test
+    fun sampleRetry_withKey_staysExtractive() = runBlocking {
+        var calls = 0
+        val store = FakeStore(settings = ReaderSettings(geminiKey = "configured"))
+        val repo = LocalEditionRepository(
+            store,
+            today = { sampleDay },
+            summarize = { _, _ ->
+                calls += 1
+                "Should not be stored."
+            },
+        )
+
+        val retried = repo.retrySample().getOrThrow()
+
+        assertTrue(retried.isSample)
+        assertTrue(retried.briefing.endsWith("Summary assembled from headlines."))
+        assertEquals(0, calls)
+    }
+
+    @Test
+    fun saveGeminiKey_replacesASavedKeyAndBlankClearsIt() {
+        val store = FakeStore(settings = ReaderSettings(geminiKey = "configured"))
+        val repo = LocalEditionRepository(store)
+
+        assertEquals("configured", repo.savedGeminiKey())
+        assertTrue(repo.saveGeminiKey("  next  ").isSuccess)
+        assertEquals("next", repo.savedGeminiKey())
+        assertTrue(repo.saveGeminiKey("   ").isSuccess)
+        assertEquals("", repo.savedGeminiKey())
+    }
+
+    @Test
+    fun saveGeminiKey_failedWriteKeepsThePreviousKey() {
+        val store = FakeStore(settings = ReaderSettings(geminiKey = "configured"))
+        store.failSettingsWrite = true
+        val repo = LocalEditionRepository(store)
+
+        assertTrue(repo.saveGeminiKey("next").isFailure)
+        assertEquals("configured", store.readSettings()?.geminiKey)
     }
 }
 

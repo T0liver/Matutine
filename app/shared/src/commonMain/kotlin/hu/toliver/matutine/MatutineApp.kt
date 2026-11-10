@@ -24,6 +24,7 @@ import hu.toliver.matutine.edition.openCalendarPermissionSettings
 import hu.toliver.matutine.edition.readCalDavCalendar
 import hu.toliver.matutine.edition.readDeviceCalendar
 import hu.toliver.matutine.edition.readFeedDocument
+import hu.toliver.matutine.edition.summarizeWithGemini
 import hu.toliver.matutine.edition.showsNoTopicLine
 import hu.toliver.matutine.edition.writesDeviceCalendarSnapshot
 import hu.toliver.matutine.settings.InterestsScreen
@@ -61,6 +62,7 @@ fun MatutineApp(
             writesDeviceCalendarSnapshot = writesDeviceCalendarSnapshot(),
             readDeviceCalendar = ::readDeviceCalendar,
             readCalDav = ::readCalDavCalendar,
+            summarize = ::summarizeWithGemini,
         )
         EditionViewModel(repository)
     }
@@ -117,6 +119,9 @@ fun MatutineApp(
                 onCalDavPasswordChange = viewModel::updateCalDavPassword,
                 calDavError = viewModel.calDavFieldError,
                 onSaveCalDav = viewModel::saveCalDav,
+                geminiKey = viewModel.geminiKey,
+                onGeminiKeyChange = viewModel::updateGeminiKey,
+                onSaveGeminiKey = viewModel::saveGeminiKey,
                 onOpenInterests = { screen = MatutineScreen.Interests(returnToSettings = true) },
                 onGenerate = {
                     viewModel.generate()
@@ -167,6 +172,10 @@ fun MatutineApp(
                 calendarPermissionOff = calendarPermissionOff,
                 onOpenCalendarPermission = ::openCalendarPermissionSettings,
                 editionLayoutId = viewModel.editionLayout,
+                sameDayExtras = ready?.sameDayExtras.orEmpty(),
+                onNewEditionNow = viewModel::newEditionNow,
+                onOpenExtra = viewModel::openExtra,
+                onOpenMorning = viewModel::openMorning,
                 onOpenTypewriter = if (showsTypewriter() && ready != null) {
                     {
                         typewriterDraft = EditionTranscript.render(ready.edition)

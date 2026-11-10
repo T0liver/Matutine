@@ -3,11 +3,14 @@ package hu.toliver.matutine.store
 import hu.toliver.matutine.edition.CalDavAccount
 import hu.toliver.matutine.edition.CalendarOccurrence
 import hu.toliver.matutine.edition.CalendarSnapshot
+import hu.toliver.matutine.edition.EditionRole
 import hu.toliver.matutine.edition.LocalEditionRepository
 import hu.toliver.matutine.edition.ReaderSettings
+import hu.toliver.matutine.edition.SampleGenerator
 import hu.toliver.matutine.edition.SourceList
 import hu.toliver.matutine.edition.StoryRank
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.Test
@@ -148,5 +151,34 @@ class FileEditionStoreTest {
         assertEquals(snapshot, store.readCalendarSnapshot())
         assertTrue(File(dir, "calendar-snapshot.json").exists())
         assertNull(store.readSourceList())
+    }
+
+    @Test
+    fun saveExtra_roundTripsWithoutRewritingTheMorningFile() {
+        val dir = Files.createTempDirectory("matutine-extra").toFile()
+        val store = FileEditionStore(dir.absolutePath)
+        val morning = SampleGenerator.forDay(LocalDate(2026, 11, 7)).copy(
+            id = "morning-2026-11-07",
+            isSample = false,
+            briefing = "Morning stays",
+        )
+        store.saveMorningEdition(morning)
+        val morningFile = File(dir, "editions/2026-11-07-morning.json")
+        val before = morningFile.readText()
+        val extra = morning.copy(
+            id = "extra-2026-11-07-1",
+            revision = 1,
+            role = EditionRole.extra,
+            briefing = "Extra",
+        )
+        val otherDay = extra.copy(id = "extra-2026-11-06-1", dayKey = "2026-11-06")
+
+        store.saveExtra(extra)
+        store.saveExtra(otherDay)
+
+        assertEquals(before, morningFile.readText())
+        assertEquals(listOf(extra), store.loadExtras("2026-11-07"))
+        assertEquals(listOf(otherDay), store.loadExtras("2026-11-06"))
+        assertEquals(morning, store.loadMorningEdition("2026-11-07"))
     }
 }

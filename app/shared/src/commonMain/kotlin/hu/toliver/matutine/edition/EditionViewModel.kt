@@ -17,6 +17,7 @@ sealed interface EditionUiState {
         val generating: Boolean = false,
         val notice: String? = null,
         val taskSaved: Boolean = false,
+        val sameDayExtras: List<Edition> = emptyList(),
     ) : EditionUiState
 
     data class SampleLoadFailed(val message: String = "The sample edition didn't load.") : EditionUiState
@@ -78,6 +79,9 @@ class EditionViewModel(
     var editionLayout by mutableStateOf(DEFAULT_EDITION_LAYOUT)
         private set
 
+    var geminiKey by mutableStateOf("")
+        private set
+
     var typewriterSaved by mutableStateOf(false)
         private set
 
@@ -92,6 +96,7 @@ class EditionViewModel(
     private var calDavUsernameBaseline: String = ""
     private var notificationTimeBaseline: String = DEFAULT_NOTIFICATION_TIME
     private var notificationBodyBaseline: String = EDITION_READY_NOTIFICATION_BODY
+    private var geminiKeyBaseline: String = ""
 
     init {
         feedBaseline = runCatching { repository.savedFeedUrls().singleOrNull().orEmpty() }.getOrDefault("")
@@ -110,6 +115,8 @@ class EditionViewModel(
         notificationBody = notificationBodyBaseline
         editionTheme = runCatching { repository.savedEditionTheme() }.getOrDefault(DEFAULT_EDITION_THEME)
         editionLayout = runCatching { repository.savedEditionLayout() }.getOrDefault(DEFAULT_EDITION_LAYOUT)
+        geminiKeyBaseline = runCatching { repository.savedGeminiKey() }.getOrDefault("")
+        geminiKey = geminiKeyBaseline
         load()
     }
 
@@ -148,6 +155,14 @@ class EditionViewModel(
     fun saveEditionTheme(themeId: String) {
         repository.saveEditionTheme(themeId)
             .onSuccess { editionTheme = repository.savedEditionTheme() }
+    }
+
+    fun updateGeminiKey(value: String) {
+        geminiKey = value
+    }
+
+    fun saveGeminiKey() {
+        persistGeminiKey(geminiKey)
     }
 
     fun saveEditionLayout(layoutId: String) {
@@ -276,10 +291,16 @@ class EditionViewModel(
                 true
             }
             val notice = if (!calDavSaved && calendarNotice == null) CALDAV_DIDNT_LOAD else calendarNotice
+            val typedKey = geminiKey
+            if (typedKey.trim() != geminiKeyBaseline) persistGeminiKey(typedKey)
             repository.generateToday()
                 .onSuccess { edition ->
                     feedFieldError = null
-                    state = EditionUiState.Ready(edition, notice = notice)
+                    state = EditionUiState.Ready(
+                        edition,
+                        notice = notice,
+                        sameDayExtras = loadExtras(),
+                    )
                 }
                 .onFailure {
                     state = restore(FEED_DIDNT_LOAD)
@@ -291,8 +312,47 @@ class EditionViewModel(
         state = EditionUiState.Loading
         scope.launch {
             repository.loadCurrentMorningEdition()
-                .onSuccess { edition -> state = EditionUiState.Ready(edition) }
+                .onSuccess { edition ->
+                    state = EditionUiState.Ready(edition, sameDayExtras = loadExtras())
+                }
                 .onFailure { error -> state = mapFailure(error) }
+        }
+    }
+
+    fun newEditionNow() {
+        val current = state as? EditionUiState.Ready ?: return
+        if (current.generating) return
+        state = current.copy(generating = true, notice = null)
+        scope.launch {
+            repository.newEditionNow()
+                .onSuccess {
+                    val morning = repository.loadCurrentMorningEdition().getOrThrow()
+                    state = EditionUiState.Ready(morning, sameDayExtras = loadExtras())
+                }
+                .onFailure {
+                    val shown = state as? EditionUiState.Ready ?: current
+                    state = shown.copy(generating = false, notice = FEED_DIDNT_LOAD)
+                }
+        }
+    }
+
+    fun openExtra(id: String) {
+        val current = state as? EditionUiState.Ready ?: return
+        val extra = current.sameDayExtras.singleOrNull { it.id == id } ?: return
+        state = current.copy(edition = extra, taskSaved = false)
+    }
+
+    fun openMorning() {
+        val current = state as? EditionUiState.Ready ?: return
+        scope.launch {
+            repository.loadCurrentMorningEdition()
+                .onSuccess { morning ->
+                    state = current.copy(
+                        edition = morning,
+                        sameDayExtras = loadExtras(),
+                        taskSaved = false,
+                    )
+                }
         }
     }
 
@@ -338,7 +398,7 @@ class EditionViewModel(
         }
         val generation = ++typewriterGeneration
         scope.launch {
-            repository.updateMorningEdition(updated)
+            saveEdition(updated)
                 .onSuccess { saved ->
                     if (generation != typewriterGeneration) {
                         onResult(false)
@@ -378,7 +438,7 @@ class EditionViewModel(
         state = previous.copy(edition = updated)
         val rollback = previous
         scope.launch {
-            repository.updateMorningEdition(updated)
+            saveEdition(updated)
                 .onSuccess { saved ->
                     val current = state as? EditionUiState.Ready
                     if (current != null && current.edition.tasks == updated.tasks) {
@@ -392,6 +452,27 @@ class EditionViewModel(
                     }
                 }
         }
+    }
+
+    private suspend fun loadExtras(): List<Edition> =
+        runCatching { repository.loadSameDayExtras() }.getOrDefault(emptyList())
+
+    private suspend fun saveEdition(edition: Edition): Result<Edition> =
+        if (edition.role == EditionRole.extra) {
+            repository.updateExtra(edition)
+        } else {
+            repository.updateMorningEdition(edition)
+        }
+
+    private fun persistGeminiKey(typed: String): Boolean {
+        val saved = repository.saveGeminiKey(typed)
+        if (saved.isSuccess) {
+            geminiKeyBaseline = typed.trim()
+            if (geminiKey == typed) geminiKey = geminiKeyBaseline
+            return true
+        }
+        if (geminiKey == typed) geminiKey = geminiKeyBaseline
+        return false
     }
 
     private fun calDavFieldsDirty(url: String, username: String, password: String): Boolean =

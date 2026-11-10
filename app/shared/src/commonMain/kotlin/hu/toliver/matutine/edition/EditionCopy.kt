@@ -13,3 +13,6 @@ internal object EditionCopy {
 
 internal fun showsNoTopicLine(isSample: Boolean, topics: List<String>): Boolean =
     !isSample && topics.none { it.isNotBlank() }
+
+internal fun sameDayExtraLabel(edition: Edition): String =
+    edition.stories.firstOrNull()?.headline?.takeIf { it.isNotBlank() } ?: "Extra"

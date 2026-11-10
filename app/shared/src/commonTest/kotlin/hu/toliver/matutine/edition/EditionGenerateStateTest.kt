@@ -382,6 +382,77 @@ class EditionGenerateStateTest {
         assertEquals(1, repository.generateCalls)
     }
 
+    @Test
+    fun newEditionNowLeavesTheMorningOnTheFrontPageAndTheListOpensTheExtra() {
+        val repository = FakeEditionRepository(finished)
+        val viewModel = viewModel(repository)
+
+        viewModel.newEditionNow()
+
+        val front = viewModel.state as EditionUiState.Ready
+        assertEquals(finished.id, front.edition.id)
+        assertEquals(EditionRole.morning, front.edition.role)
+        assertEquals(finished.briefing, front.edition.briefing)
+        val extra = front.sameDayExtras.single()
+        assertEquals(EditionRole.extra, extra.role)
+        assertEquals(extra.dayKey, finished.dayKey)
+        assertEquals(sameDayExtraLabel(extra), extra.stories.first().headline)
+
+        viewModel.openExtra(extra.id)
+        val opened = viewModel.state as EditionUiState.Ready
+        assertEquals(extra.id, opened.edition.id)
+        assertEquals(listOf(extra), opened.sameDayExtras)
+
+        viewModel.openMorning()
+        val back = viewModel.state as EditionUiState.Ready
+        assertEquals(finished.id, back.edition.id)
+        assertEquals(EditionRole.morning, back.edition.role)
+        assertTrue(back.sameDayExtras.all { it.dayKey == finished.dayKey })
+    }
+
+    @Test
+    fun failedNewEditionNowKeepsTheVisiblePaper() {
+        val repository = FakeEditionRepository(finished)
+        repository.failNewEdition = true
+        val viewModel = viewModel(repository)
+
+        viewModel.newEditionNow()
+
+        val ready = viewModel.state as EditionUiState.Ready
+        assertFalse(ready.generating)
+        assertEquals(finished.id, ready.edition.id)
+        assertEquals(FEED_DIDNT_LOAD, ready.notice)
+        assertTrue(ready.sameDayExtras.isEmpty())
+    }
+
+    @Test
+    fun generatePersistsADirtyGeminiKeyBeforeGenerating() {
+        val repository = FakeEditionRepository(sample, generate = { finished })
+        val viewModel = viewModel(repository)
+        viewModel.updateGeminiKey("  configured  ")
+
+        viewModel.generate()
+
+        assertEquals("configured", viewModel.geminiKey)
+        assertEquals("configured", repository.savedGeminiKey())
+        assertEquals(1, repository.generateCalls)
+    }
+
+    @Test
+    fun failedGeminiKeySaveKeepsThePreviousKeyAndStillGenerates() {
+        val repository = FakeEditionRepository(sample, generate = { finished })
+        repository.geminiKey = "configured"
+        val viewModel = viewModel(repository)
+        viewModel.updateGeminiKey("next")
+        repository.failGeminiSave = true
+
+        viewModel.generate()
+
+        assertEquals("configured", viewModel.geminiKey)
+        assertEquals("configured", repository.savedGeminiKey())
+        assertEquals(1, repository.generateCalls)
+    }
+
     private fun viewModel(repository: EditionRepository) =
         EditionViewModel(repository, CoroutineScope(Dispatchers.Unconfined))
 }
@@ -452,6 +523,17 @@ private class FakeEditionRepository(
 
     override fun saveEditionLayout(layoutId: String): Result<Unit> = Result.success(Unit)
 
+    var geminiKey: String = ""
+    var failGeminiSave: Boolean = false
+
+    override fun savedGeminiKey(): String = geminiKey
+
+    override fun saveGeminiKey(key: String): Result<Unit> {
+        if (failGeminiSave) return Result.failure(IllegalStateException("settings_unavailable"))
+        geminiKey = key.trim()
+        return Result.success(Unit)
+    }
+
     override suspend fun saveFeedUrl(url: String): Result<Unit> {
         saveCalls += 1
         blockSave?.await()
@@ -485,5 +567,25 @@ private class FakeEditionRepository(
         return runCatching { generate() }
     }
 
+    private val extras = mutableListOf<Edition>()
+    var failNewEdition: Boolean = false
+
+    override suspend fun newEditionNow(): Result<Edition> {
+        if (failNewEdition) return Result.failure(IllegalStateException(FEED_DIDNT_LOAD))
+        val extra = edition.copy(
+            id = "extra-${edition.dayKey}-1",
+            revision = 1,
+            role = EditionRole.extra,
+            briefing = "Fresh extra",
+        )
+        extras += extra
+        return Result.success(extra)
+    }
+
+    override suspend fun loadSameDayExtras(): List<Edition> = extras.toList()
+
     override suspend fun updateMorningEdition(edition: Edition): Result<Edition> = Result.success(edition)
+
+    override suspend fun updateExtra(edition: Edition): Result<Edition> =
+        Result.success(edition.copy(revision = edition.revision + 1))
 }
