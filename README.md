@@ -1,6 +1,6 @@
 # Matutine
 
-Matutine is a morning newspaper for Android and Desktop (Kotlin Multiplatform, Compose). **This README's judge path** gets you from a fresh clone to a visible front page in a few minutes. You do not need an account, an AI key, or to answer any interest questions.
+Matutine is a morning newspaper for Android, Desktop, and the browser (Kotlin Multiplatform, Compose). **This README's judge path** gets you from a fresh clone to a visible front page in a few minutes — on a phone, on Desktop, and in a browser on your LAN. You do not need an account, an AI key, or to answer any interest questions.
 
 Release builds from GitHub Actions are Story 1.11; the steps below use a local debug build.
 
@@ -13,6 +13,8 @@ Release builds from GitHub Actions are Story 1.11; the steps below use a local d
 **Android only:** either [Android Studio](https://developer.android.com/studio) with the Android SDK, or the SDK command-line tools with `ANDROID_HOME` pointing at that SDK (for example `~/Android/Sdk`). An emulator or a USB-connected phone with USB debugging enabled.
 
 **Desktop only:** JDK 17+ is enough on Linux, Windows, or macOS.
+
+**Server and browser (Milestone B):** [Docker](https://docs.docker.com/engine/install/) with the `docker` CLI on the machine that runs the server.
 
 ## Judge path — Desktop
 
@@ -53,6 +55,31 @@ No login, API key, or Interests screen appears on this path.
 
 No login, API key, or Interests screen appears on this path.
 
+## Judge path — Server and browser
+
+Use a home or office LAN. **Do not** expose the server to the public internet — no reverse proxy, port forwarding, or tunnel for the contest judge path.
+
+1. Clone the repository and `cd` into it (skip if you already did for Android or Desktop).
+2. From the repo root, build the server image (the first build runs Gradle inside Docker and can take several minutes):
+
+   ```bash
+   docker build -f server/Dockerfile -t matutine-server .
+   ```
+
+3. Start the server on port 8080 and keep papers in a Docker volume:
+
+   ```bash
+   docker run --rm -p 8080:8080 -v matutine-data:/data matutine-server
+   ```
+
+   With no `MATUTINE_TOKEN` set, the shared token is the literal `matutine-demo`.
+
+4. In a browser on the same machine, open `http://127.0.0.1:8080/`. From another device on the LAN, use `http://<this-host's-LAN-IP>:8080/` (plain `http` on the LAN is expected).
+
+5. The token gate is the first screen: enter `matutine-demo` and submit. After a valid token you should see today's **sample edition** — masthead **Matutine**, **SAMPLE EDITION**, briefing, ranked stories, calendar events, and tasks — the same content shape as on Android and Desktop.
+
+A wrong token shows **That token doesn't match.** and keeps what you typed. No login, AI key, or Admin setup is required for this path.
+
 ## If the sample does not load
 
 The page shows **The sample edition didn't load.** with a retry control. Use **Retry** once. **Settings** is available but not required for the judge demo.
@@ -60,8 +87,8 @@ The page shows **The sample edition didn't load.** with a retry control. Use **R
 ## What this README does not cover
 
 - **iOS** is not a target for this entry.
-- **Docker, the server, and the browser client** are documented separately when that milestone ships; they are not part of this judge path.
-- **Web** targets in this repo are for server-hosted use later, not an offline contest client.
+- **VPN, reverse-proxy, and public-internet exposure** for the server — keep it on your LAN for the judge path.
+- **Pulling a pre-published image from a registry** is release-workflow work; this path builds the image locally from `server/Dockerfile`.
 
 ---
 
@@ -72,7 +99,7 @@ This is a Kotlin Multiplatform project with Android, Desktop (JVM), and server m
 ### Other run targets
 
 - Android APK only: `./gradlew :app:androidApp:assembleDebug`
-- Server (not needed for the judge path): `./gradlew :server:run`
+- Server JVM dev (not the judge path; judges use Docker above): `./gradlew :server:run`
 - Web app (server-hosted later): `./gradlew :app:webApp:wasmJsBrowserDevelopmentRun` or `./gradlew :app:webApp:jsBrowserDevelopmentRun`
 
 ### Tests

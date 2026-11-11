@@ -1,4 +1,4 @@
-name: Release clients
+name: Release clients and server image
 
 on:
   push:
@@ -144,4 +144,28 @@ jobs:
         with:
           name: matutine-desktop-macos-dmg
           path: app/desktopApp/build/compose/binaries/main-release/dmg/*.dmg
+          if-no-files-found: error
+
+  server-docker:
+    name: Server Docker image
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.merged == true &&
+      contains(join(github.event.pull_request.labels.*.name, ','), 'version'))
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t matutine-server -f server/Dockerfile .
+
+      - name: Save image tarball
+        run: docker save matutine-server | gzip > matutine-server-image.tar.gz
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: matutine-server-docker-image
+          path: matutine-server-image.tar.gz
           if-no-files-found: error
