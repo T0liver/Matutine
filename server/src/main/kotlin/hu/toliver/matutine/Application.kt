@@ -24,6 +24,7 @@ internal val GenerationRawKey = AttributeKey<String>("matutine.generationTime")
 private val GeminiKeyKey = AttributeKey<String>("matutine.geminiKey")
 private val ClockKey = AttributeKey<() -> Instant>("matutine.clock")
 private val PortsKey = AttributeKey<ServerPorts>("matutine.ports")
+internal val UnsetMatutineTokenKey = AttributeKey<Unit>("matutine.unsetTokenEnv")
 
 internal class ServerPorts(
     val readFeed: (suspend (String) -> String)? = null,
@@ -50,7 +51,12 @@ fun Application.module() {
     val envToken = if (attributes.contains(SharedTokenKey)) {
         attributes[SharedTokenKey]
     } else {
-        System.getenv("MATUTINE_TOKEN")
+        val raw = if (attributes.contains(UnsetMatutineTokenKey)) {
+            null
+        } else {
+            System.getenv("MATUTINE_TOKEN")
+        }
+        resolveSharedToken(raw)
     }
     val documents = attributes.getOrNull(DocumentStoreKey)
         ?: DataDirectoryStore(resolveDataRoot(System.getenv("MATUTINE_DATA")))
@@ -106,6 +112,10 @@ fun Application.module() {
 
 fun Application.installTestDocuments(token: String, documents: EditionStore) {
     attributes.put(SharedTokenKey, token)
+    attributes.put(DocumentStoreKey, documents)
+}
+
+fun Application.installTestDataDirectory(documents: EditionStore) {
     attributes.put(DocumentStoreKey, documents)
 }
 

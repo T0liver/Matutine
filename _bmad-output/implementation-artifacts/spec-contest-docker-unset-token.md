@@ -1,6 +1,6 @@
 # Contest: Docker starts when the token env var is unset
 
-Status: ready for an agent to implement.
+Status: done (2026-11-20). Docker boot without `MATUTINE_TOKEN` verified; server test `unsetMatutineToken_envPathBootsAndAcceptsDemoBearer`.
 Suggested epic: contest-hardening. Do not mark Epic 3 done from this ticket.
 
 ## Problem

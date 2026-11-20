@@ -46,6 +46,23 @@ import kotlinx.datetime.toLocalDateTime
 class ApplicationTest {
 
     @Test
+    fun unsetMatutineToken_envPathBootsAndAcceptsDemoBearer() = testApplication {
+        val root = Files.createTempDirectory("matutine-docker-env").toFile()
+        application {
+            attributes.put(UnsetMatutineTokenKey, Unit)
+            installTestDataDirectory(DataDirectoryStore(root.absolutePath))
+            module()
+        }
+        val rootPage = client.get("/")
+        assertEquals(HttpStatusCode.OK, rootPage.status)
+        val response = client.get("/editions/current") {
+            header("Authorization", "Bearer matutine-demo")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(decodeEdition(response.bodyAsText()).isSample)
+    }
+
+    @Test
     fun unsetToken_acceptsTheDemoBearer() = testApplication {
         val root = Files.createTempDirectory("matutine-demo").toFile()
         application {
