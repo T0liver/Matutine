@@ -8,6 +8,7 @@ import hu.toliver.matutine.edition.EditionStore
 import hu.toliver.matutine.edition.EditionStory
 import hu.toliver.matutine.edition.EditionTranscript
 import hu.toliver.matutine.edition.FEED_DIDNT_LOAD
+import hu.toliver.matutine.edition.GEMINI_GENERATE_URL
 import hu.toliver.matutine.edition.ReaderSettings
 import hu.toliver.matutine.edition.SourceList
 import hu.toliver.matutine.edition.StoryRank
@@ -433,6 +434,29 @@ class ApplicationTest {
         assertEquals("", settings.geminiKey)
         assertEquals(listOf("ports"), settings.topics)
         assertFalse(root.resolve("settings.json").readText().contains("server-key"))
+        assertTrue(GEMINI_GENERATE_URL.contains("gemini-flash-lite-latest"))
+    }
+
+    @Test
+    fun failedGeminiCall_keepsTheExtractiveBriefingOnTheServer() = runBlocking {
+        val root = Files.createTempDirectory("matutine-key-fail").toFile()
+        val store = DataDirectoryStore(root.absolutePath)
+        store.writeSourceList(SourceList(feeds = listOf("https://example.com/rss.xml")))
+        var calls = 0
+        val clock = morningClock(
+            store,
+            DUE,
+            geminiKey = "server-key",
+            readFeed = { PERSONAL_RSS },
+            summarize = { _, _ ->
+                calls += 1
+                error("summarizer_unavailable")
+            },
+        )
+        clock.tick()
+        val edition = requireNotNull(store.loadMorningEdition("2026-11-11"))
+        assertEquals(1, calls)
+        assertTrue(edition.briefing.endsWith("Summary assembled from headlines."))
     }
 
     @Test

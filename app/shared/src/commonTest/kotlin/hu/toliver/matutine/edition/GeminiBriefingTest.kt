@@ -26,15 +26,16 @@ class GeminiBriefingTest {
         assertFalse(prompt.contains("Summary assembled from headlines."))
         assertFalse(body.contains("configured"))
         assertFalse(GEMINI_GENERATE_URL.contains("key="))
-        assertTrue(GEMINI_GENERATE_URL.contains("gemini-2.5-flash"))
+        assertTrue(GEMINI_GENERATE_URL.contains("gemini-flash-lite-latest"))
         assertFalse(GEMINI_GENERATE_URL.contains("pro"))
     }
 
     @Test
     fun responseTextJoinsPartsAndUnescapes() {
-        val body = """{"candidates":[{"content":{"parts":[{"text":"The harbor is quiet."},{"text":" Ships\nmove."}]}}]}"""
+        val body = """{"candidates":[{"content":{"parts":[{"text":"Internal reasoning.","thought":true},{"text":"The harbor is quiet.","thoughtSignature":"sig"},{"text":" Ships\nmove."}]}}]}"""
 
         assertEquals("The harbor is quiet. Ships\nmove.", briefingTextFromGeminiResponse(body))
         assertTrue(runCatching { briefingTextFromGeminiResponse("""{"candidates":[]}""") }.isFailure)
+        assertTrue(runCatching { briefingTextFromGeminiResponse("""{"candidates":[{"content":{"parts":[{"text":"Only thought.","thought":true}]}}]}""") }.isFailure)
     }
 }
