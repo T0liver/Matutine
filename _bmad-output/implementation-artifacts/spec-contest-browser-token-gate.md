@@ -1,6 +1,7 @@
 # Contest: verify the browser token gate
 
-Status: ready to verify in the browser, then fix whatever fails.
+Status: done (2026-11-21). HTML token gate submits to `GET /editions/current`; wrong bearer shows **That token doesn't match.** and keeps the typed value; `matutine-demo` opens the sample edition in Compose. Wasm GET uses `XMLHttpRequest` after the Compose Canvas gate could not handle Continue clicks reliably.
+
 Suggested epic: contest-hardening (Stories 3.1 and 3.7). Do not mark those stories done from this ticket.
 
 ## Problem

@@ -1,23 +1,15 @@
 package hu.toliver.matutine
 
-import kotlin.js.ExperimentalWasmJsInterop
-import kotlin.js.JsString
-import kotlinx.browser.window
-import kotlinx.coroutines.await
-import org.w3c.fetch.Headers
-import org.w3c.fetch.RequestInit
 import org.w3c.xhr.XMLHttpRequest
 
-@OptIn(ExperimentalWasmJsInterop::class)
 private suspend fun fetchGet(path: String, token: String): ApiResponse {
-    val headers = Headers()
-    headers.append("Authorization", "Bearer $token")
-    val response = window.fetch(path, RequestInit(method = "GET", headers = headers)).await()
-    val text = response.text().await<JsString>().toString()
-    return ApiResponse(status = response.status.toInt(), body = text)
+    val xhr = XMLHttpRequest()
+    xhr.open("GET", path, async = false)
+    xhr.setRequestHeader("Authorization", "Bearer $token")
+    xhr.send()
+    return ApiResponse(status = xhr.status.toInt(), body = xhr.responseText)
 }
 
-@OptIn(ExperimentalWasmJsInterop::class)
 private suspend fun fetchWithBody(method: String, path: String, token: String, body: String): ApiResponse {
     val xhr = XMLHttpRequest()
     xhr.open(method, path, async = false)

@@ -4,4 +4,70 @@ html, body {
     margin: 0;
     padding: 0;
     overflow: hidden;
+    background: #efebe3;
+    color: #1a1612;
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+
+.matutine-boot {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.matutine-token-gate {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 100%;
+    padding: 24px;
+    background: #efebe3;
+}
+
+.matutine-token-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 100%;
+    margin: 0;
+}
+
+.matutine-token-label {
+    font-size: 1rem;
+}
+
+.matutine-token-input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid #1a1612;
+    border-radius: 2px;
+    background: #fffcf6;
+    color: #1a1612;
+    font: inherit;
+}
+
+.matutine-token-error {
+    margin: 0;
+    color: #8b1e1e;
+    font-size: 1rem;
+}
+
+.matutine-token-continue {
+    align-self: flex-start;
+    min-height: 40px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 2px;
+    background: #1a1612;
+    color: #f6f1e6;
+    font: 600 0.95rem system-ui, sans-serif;
+    cursor: pointer;
+}
+
+.matutine-token-continue:disabled {
+    opacity: 0.6;
+    cursor: default;
 }

@@ -6,15 +6,109 @@
     <title>Matutine</title>
     <link type="text/css" rel="stylesheet" href="styles.css">
 </head>
-<body style="text-align: center; align-content: center">
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 50 50" role="presentation">
-    <circle cx="25" cy="25" r="20" stroke="#ccc" stroke-width="4" fill="none"/>
-    <circle cx="25" cy="25" r="20" stroke="#333" stroke-width="4" fill="none" stroke-linecap="round"
-            stroke-dasharray="90 125">
-        <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
-                          repeatCount="indefinite"/>
-    </circle>
-</svg>
-<script type="application/javascript" src="webApp.js"></script>
+<body>
+<div id="matutine-boot" class="matutine-boot">
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 50 50" role="presentation" aria-hidden="true">
+        <circle cx="25" cy="25" r="20" stroke="#ccc" stroke-width="4" fill="none"/>
+        <circle cx="25" cy="25" r="20" stroke="#333" stroke-width="4" fill="none" stroke-linecap="round"
+                stroke-dasharray="90 125">
+            <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
+                              repeatCount="indefinite"/>
+        </circle>
+    </svg>
+</div>
+<script type="application/json" id="matutine-bootstrap-token"></script>
+<textarea id="matutine-bootstrap-edition" hidden aria-hidden="true" tabindex="-1"></textarea>
+<section id="matutine-token-gate" class="matutine-token-gate" hidden>
+    <form id="matutine-token-form" class="matutine-token-form">
+        <label class="matutine-token-label" for="matutine-token-input">Token</label>
+        <input id="matutine-token-input" class="matutine-token-input" name="token" type="text"
+               autocomplete="off" spellcheck="false"/>
+        <p id="matutine-token-error" class="matutine-token-error" hidden></p>
+        <button id="matutine-token-continue" class="matutine-token-continue" type="submit">Continue</button>
+    </form>
+</section>
+<script>
+(function () {
+    var TOKEN_KEY = 'matutine.bearerToken';
+    var TOKEN_MISMATCH = "That token doesn't match.";
+    var boot = document.getElementById('matutine-boot');
+    var gate = document.getElementById('matutine-token-gate');
+    var form = document.getElementById('matutine-token-form');
+    var input = document.getElementById('matutine-token-input');
+    var error = document.getElementById('matutine-token-error');
+
+    function hideBoot() {
+        boot.hidden = true;
+    }
+
+    function showError(message) {
+        error.textContent = message;
+        error.hidden = !message;
+    }
+
+    function loadPaperApp() {
+        hideBoot();
+        gate.hidden = true;
+        var script = document.createElement('script');
+        script.type = 'application/javascript';
+        script.src = 'webApp.js';
+        document.body.appendChild(script);
+    }
+
+    async function rememberAndOpen(token, editionBody) {
+        sessionStorage.setItem(TOKEN_KEY, token);
+        document.getElementById('matutine-bootstrap-token').textContent = token;
+        document.getElementById('matutine-bootstrap-edition').value = editionBody;
+        loadPaperApp();
+    }
+
+    async function tryBearer(token) {
+        var response = await fetch('/editions/current', {
+            method: 'GET',
+            headers: { Authorization: 'Bearer ' + token },
+        });
+        if (response.status === 401) {
+            showError(TOKEN_MISMATCH);
+            return false;
+        }
+        if (response.ok) {
+            var body = await response.text();
+            await rememberAndOpen(token, body);
+            return true;
+        }
+        showError('');
+        return false;
+    }
+
+    function showGate() {
+        hideBoot();
+        gate.hidden = false;
+        input.focus();
+    }
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        showError('');
+        tryBearer(input.value);
+    });
+
+    (async function start() {
+        var saved = sessionStorage.getItem(TOKEN_KEY);
+        if (saved) {
+            var response = await fetch('/editions/current', {
+                method: 'GET',
+                headers: { Authorization: 'Bearer ' + saved },
+            });
+            if (response.ok) {
+                await rememberAndOpen(saved, await response.text());
+                return;
+            }
+            sessionStorage.removeItem(TOKEN_KEY);
+        }
+        showGate();
+    })();
+})();
+</script>
 </body>
 </html>
