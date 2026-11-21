@@ -9,7 +9,7 @@ object EditionTranscript {
     const val SAVE_FAILED = "Couldn't save. Your text is still here."
 
     private val headers = setOf(BRIEFING, CALENDAR, TASKS)
-    private val taskMark = Regex("""^\[(x|X| )] ?(.*)$""")
+    private val taskMark = Regex("""^\[(x|X| )\] ?(.*)$""")
 
     fun render(edition: Edition): String = buildString {
         appendLine(edition.mastheadName)

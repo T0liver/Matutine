@@ -1,6 +1,6 @@
 package hu.toliver.matutine.edition
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -166,7 +166,7 @@ class LocalEditionRepositoryTest {
     private val sampleDay = LocalDate(2026, 11, 7)
 
     @Test
-    fun absentSourceList_buildsBundledSampleAndDoesNotWriteList() = runBlocking {
+    fun absentSourceList_buildsBundledSampleAndDoesNotWriteList() = runTest {
         val store = FakeStore()
         val repo = LocalEditionRepository(store, today = { sampleDay })
         val edition = repo.loadCurrentMorningEdition().getOrThrow()
@@ -184,7 +184,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun savedMorningEdition_isReturnedWithoutBuildingSample() = runBlocking {
+    fun savedMorningEdition_isReturnedWithoutBuildingSample() = runTest {
         var generated = false
         val saved = SampleGenerator.forDay(sampleDay).copy(id = "saved", isSample = false, briefing = "Kept")
         val store = FakeStore(morning = saved)
@@ -205,7 +205,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun emptyOrPresentSourceList_doesNotUseBundledSample() = runBlocking {
+    fun emptyOrPresentSourceList_doesNotUseBundledSample() = runTest {
         listOf(
             SourceList(),
             SourceList(feeds = listOf("https://example.com/feed.xml")),
@@ -228,7 +228,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun saveRssOrAtom_addsThatUrlAndLeavesTheSampleUntilGenerate() = runBlocking {
+    fun saveRssOrAtom_addsThatUrlAndLeavesTheSampleUntilGenerate() = runTest {
         val store = FakeStore()
         val documents = mapOf(
             "https://example.com/rss.xml" to PERSONAL_RSS,
@@ -251,7 +251,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun saveFeedUrl_replacesFeedsAndKeepsTheCalendar() = runBlocking {
+    fun saveFeedUrl_replacesFeedsAndKeepsTheCalendar() = runTest {
         val store = FakeStore(
             sourceList = SourceList(
                 id = "sources",
@@ -270,7 +270,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun badDocumentOrFailedRead_keepsThePreviousUrlAndThePaper() = runBlocking {
+    fun badDocumentOrFailedRead_keepsThePreviousUrlAndThePaper() = runTest {
         val morning = SampleGenerator.forDay(sampleDay)
         val store = FakeStore(
             morning = morning,
@@ -298,7 +298,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_savedFeed_buildsTodaysMorningEditionInSourceOrder() = runBlocking {
+    fun generate_savedFeed_buildsTodaysMorningEditionInSourceOrder() = runTest {
         val store = FakeStore()
         val repo = LocalEditionRepository(
             store,
@@ -338,7 +338,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_atomFeed_usesTheEntryAsTheLead() = runBlocking {
+    fun generate_atomFeed_usesTheEntryAsTheLead() = runTest {
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/atom.xml")))
         val repo = LocalEditionRepository(store, today = { sampleDay }, readFeed = { PERSONAL_ATOM })
 
@@ -353,7 +353,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_mixedFeeds_omitsTheFailureAndNotesIt() = runBlocking {
+    fun generate_mixedFeeds_omitsTheFailureAndNotesIt() = runTest {
         val store = FakeStore(
             sourceList = SourceList(
                 feeds = listOf(
@@ -386,7 +386,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_whenNothingParses_keepsTheListAndTheCurrentPaper() = runBlocking {
+    fun generate_whenNothingParses_keepsTheListAndTheCurrentPaper() = runTest {
         val morning = SampleGenerator.forDay(sampleDay)
         val list = SourceList(feeds = listOf("https://example.com/bad.xml"))
         val store = FakeStore(morning = morning, sourceList = list)
@@ -413,7 +413,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_emptyOrAbsentList_doesNotBuildTheBundledSample() = runBlocking {
+    fun generate_emptyOrAbsentList_doesNotBuildTheBundledSample() = runTest {
         listOf<SourceList?>(null, SourceList()).forEach { list ->
             var generatedSample = false
             val store = FakeStore(sourceList = list)
@@ -433,7 +433,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_again_keepsThePersonalIdAndIncrementsRevision() = runBlocking {
+    fun generate_again_keepsThePersonalIdAndIncrementsRevision() = runTest {
         val existing = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             revision = 3,
@@ -453,7 +453,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_again_keepsBriefingRewrittenLineAndTasks() = runBlocking {
+    fun generate_again_keepsBriefingRewrittenLineAndTasks() = runTest {
         val existing = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             revision = 3,
@@ -501,7 +501,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun newEditionNow_insertsAnExtraAndLeavesOtherEditions() = runBlocking {
+    fun newEditionNow_insertsAnExtraAndLeavesOtherEditions() = runTest {
         val morning = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             revision = 2,
@@ -535,7 +535,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun lateSnapshot_isOnRegenerateOrExtraAndNotOnThePaperBefore() = runBlocking {
+    fun lateSnapshot_isOnRegenerateOrExtraAndNotOnThePaperBefore() = runTest {
         val morning = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             revision = 1,
@@ -570,7 +570,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun failedGenerateAndExtra_leaveStoredEditions() = runBlocking {
+    fun failedGenerateAndExtra_leaveStoredEditions() = runTest {
         val morning = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             revision = 2,
@@ -595,7 +595,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun saveTopics_storesChoicesLinesAndLeavesTheSourceList() = runBlocking {
+    fun saveTopics_storesChoicesLinesAndLeavesTheSourceList() = runTest {
         val list = SourceList(
             id = "sources",
             revision = 2,
@@ -618,7 +618,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_withTopics_putsTheBestFitFirstAsTheOnlyLead() = runBlocking {
+    fun generate_withTopics_putsTheBestFitFirstAsTheOnlyLead() = runTest {
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")))
         val repo = LocalEditionRepository(store, today = { sampleDay }, readFeed = { TOPIC_RSS })
         repo.saveTopics(
@@ -645,7 +645,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_equalTopicFits_keepSourceOrder() = runBlocking {
+    fun generate_equalTopicFits_keepSourceOrder() = runTest {
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")))
         val repo = LocalEditionRepository(store, today = { sampleDay }, readFeed = { TIE_RSS })
         repo.saveTopics(listOf("Video games"))
@@ -661,7 +661,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_absentOrEmptyTopics_keepsSourceOrderOnThePersonsEdition() = runBlocking {
+    fun generate_absentOrEmptyTopics_keepsSourceOrderOnThePersonsEdition() = runTest {
         listOf<ReaderSettings?>(null, ReaderSettings(topics = emptyList())).forEach { settings ->
             val store = FakeStore(
                 sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
@@ -682,7 +682,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun clearTopics_nextGenerateUsesSourceOrderAndDoesNotReturnTheSample() = runBlocking {
+    fun clearTopics_nextGenerateUsesSourceOrderAndDoesNotReturnTheSample() = runTest {
         val store = FakeStore(
             sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
             settings = ReaderSettings(topics = listOf("Technology", "Video games")),
@@ -727,7 +727,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_icsEvents_showTitleAndStartTimeInOrder() = runBlocking {
+    fun generate_icsEvents_showTitleAndStartTimeInOrder() = runTest {
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml"), calendars = listOf("https://example.com/cal.ics")))
         val documents = mapOf(
             "https://example.com/rss.xml" to PERSONAL_RSS,
@@ -757,7 +757,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_duplicateStartEndAndTitle_appearsOnce() = runBlocking {
+    fun generate_duplicateStartEndAndTitle_appearsOnce() = runTest {
         val duplicate = CalendarOccurrence(
             title = "Planning",
             startEpochSecond = utc(9, 30),
@@ -787,7 +787,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun saveCalendarUrl_whenTheLinkDoesNotOpen_keepsThePriorCalendar() = runBlocking {
+    fun saveCalendarUrl_whenTheLinkDoesNotOpen_keepsThePriorCalendar() = runTest {
         val list = SourceList(
             id = "sources",
             revision = 3,
@@ -825,7 +825,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun saveCalendarUrl_replacesCalendarsAndKeepsFeeds() = runBlocking {
+    fun saveCalendarUrl_replacesCalendarsAndKeepsFeeds() = runTest {
         val store = FakeStore(
             sourceList = SourceList(
                 id = "sources",
@@ -849,7 +849,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_deviceEvents_areIncludedAndStored() = runBlocking {
+    fun generate_deviceEvents_areIncludedAndStored() = runTest {
         val device = CalendarOccurrence(title = "Device standup", startEpochSecond = utc(8, 0), endEpochSecond = utc(8, 30))
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")))
         val repo = LocalEditionRepository(
@@ -870,7 +870,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_failedOrEmptyDeviceRead_keepsTheSnapshot() = runBlocking {
+    fun generate_failedOrEmptyDeviceRead_keepsTheSnapshot() = runTest {
         val kept = CalendarOccurrence(title = "Kept", startEpochSecond = utc(8, 0), endEpochSecond = utc(8, 15))
         listOf(DeviceCalendarRead.Failed, DeviceCalendarRead.Empty, DeviceCalendarRead.Unavailable, DeviceCalendarRead.Events(emptyList())).forEach { read ->
             val store = FakeStore(
@@ -895,7 +895,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun recordDeviceCalendar_afterThePaperExists_doesNotChangeTheEdition() = runBlocking {
+    fun recordDeviceCalendar_afterThePaperExists_doesNotChangeTheEdition() = runTest {
         val paper = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             isSample = false,
@@ -922,7 +922,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_withoutAndroidFlag_doesNotReadOrWriteTheDevice() = runBlocking {
+    fun generate_withoutAndroidFlag_doesNotReadOrWriteTheDevice() = runTest {
         val kept = CalendarOccurrence(title = "Kept", startEpochSecond = utc(8, 0), endEpochSecond = utc(8, 15))
         val store = FakeStore(
             sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
@@ -1003,7 +1003,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_failedIcsFetch_keepsSnapshotEvents() = runBlocking {
+    fun generate_failedIcsFetch_keepsSnapshotEvents() = runTest {
         val kept = CalendarOccurrence(title = "Kept", startEpochSecond = utc(8, 0), endEpochSecond = utc(8, 15))
         val store = FakeStore(
             sourceList = SourceList(
@@ -1030,7 +1030,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_userinfoCalendarUrl_isNotFetched() = runBlocking {
+    fun generate_userinfoCalendarUrl_isNotFetched() = runTest {
         val fetched = mutableListOf<String>()
         val store = FakeStore(
             sourceList = SourceList(
@@ -1060,7 +1060,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_calDavEvents_joinIcsAndDeviceEvents() = runBlocking {
+    fun generate_calDavEvents_joinIcsAndDeviceEvents() = runTest {
         val device = CalendarOccurrence(title = "Device standup", startEpochSecond = utc(8, 0), endEpochSecond = utc(8, 30))
         val store = FakeStore(
             sourceList = SourceList(
@@ -1109,7 +1109,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_sameStartEndAndTitleAcrossSources_appearsOnce() = runBlocking {
+    fun generate_sameStartEndAndTitleAcrossSources_appearsOnce() = runTest {
         val duplicate = CalendarOccurrence(
             title = "Planning",
             startEpochSecond = utc(9, 30),
@@ -1137,7 +1137,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_failedCalDavRead_notesTheFailureAndKeepsTheEdition() = runBlocking {
+    fun generate_failedCalDavRead_notesTheFailureAndKeepsTheEdition() = runTest {
         val store = FakeStore(
             sourceList = SourceList(
                 feeds = listOf("https://example.com/rss.xml"),
@@ -1169,7 +1169,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_calDavResponseWithVtodo_keepsOnlyVevents() = runBlocking {
+    fun generate_calDavResponseWithVtodo_keepsOnlyVevents() = runTest {
         val store = FakeStore(
             sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
             calDavAccount = CalDavAccount("https://calendar.example/dav/personal/", "o", "local-secret"),
@@ -1189,7 +1189,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun load_doesNotCallCalDav() = runBlocking {
+    fun load_doesNotCallCalDav() = runTest {
         val morning = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             isSample = false,
@@ -1216,7 +1216,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun saveCalDavAccount_storesThePasswordOutsideTheSourceListAndDoesNotFetch() = runBlocking {
+    fun saveCalDavAccount_storesThePasswordOutsideTheSourceListAndDoesNotFetch() = runTest {
         val store = FakeStore(
             sourceList = SourceList(
                 id = "sources",
@@ -1271,7 +1271,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_nonCalendarCalDavBody_notesTheFailure() = runBlocking {
+    fun generate_nonCalendarCalDavBody_notesTheFailure() = runTest {
         val store = FakeStore(
             sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
             calDavAccount = CalDavAccount("https://calendar.example/dav/personal/", "o", "local-secret"),
@@ -1291,7 +1291,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generate_calDavErrorStatusWithoutEvents_notesTheFailure() = runBlocking {
+    fun generate_calDavErrorStatusWithoutEvents_notesTheFailure() = runTest {
         val store = FakeStore(
             sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
             calDavAccount = CalDavAccount("https://calendar.example/dav/personal/", "o", "local-secret"),
@@ -1316,7 +1316,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_absentFeed_insertsOnceAndKeepsThatPaper() = runBlocking {
+    fun runMorning_absentFeed_insertsOnceAndKeepsThatPaper() = runTest {
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")))
         val probe = SourceProbe()
         val repo = morningRepo(store, probe)
@@ -1348,7 +1348,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_savedSampleOrEdition_doesNotWriteOrReadSources() = runBlocking {
+    fun runMorning_savedSampleOrEdition_doesNotWriteOrReadSources() = runTest {
         listOf(true, false).forEach { sample ->
             val kept = SampleGenerator.forDay(sampleDay).copy(
                 id = if (sample) "sample-${sampleDay.toDayKey()}" else "morning-${sampleDay.toDayKey()}",
@@ -1379,7 +1379,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_serverConfigured_doesNotInsertOrReadSources() = runBlocking {
+    fun runMorning_serverConfigured_doesNotInsertOrReadSources() = runTest {
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")))
         val probe = SourceProbe()
         val repo = morningRepo(store, probe, serverConfigured = true)
@@ -1395,7 +1395,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_missingOrUnreadableFeed_leavesTheStoreUnchanged() = runBlocking {
+    fun runMorning_missingOrUnreadableFeed_leavesTheStoreUnchanged() = runTest {
         listOf<SourceList?>(null, SourceList(), SourceList(feeds = listOf("https://example.com/bad.xml"))).forEach { list ->
             val store = FakeStore(sourceList = list)
             val probe = SourceProbe()
@@ -1414,7 +1414,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_failedFeedBesideAGoodOne_omitsItAndNotesIt() = runBlocking {
+    fun runMorning_failedFeedBesideAGoodOne_omitsItAndNotesIt() = runTest {
         val store = FakeStore(
             sourceList = SourceList(
                 feeds = listOf(
@@ -1451,7 +1451,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun generateToday_stillReplacesTheEditionAMorningRunLeftInPlace() = runBlocking {
+    fun generateToday_stillReplacesTheEditionAMorningRunLeftInPlace() = runTest {
         val existing = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             revision = 3,
@@ -1479,7 +1479,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_paperThatAppearsDuringTheRead_isNotReplaced() = runBlocking {
+    fun runMorning_paperThatAppearsDuringTheRead_isNotReplaced() = runTest {
         val kept = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
             isSample = false,
@@ -1517,7 +1517,7 @@ class LocalEditionRepositoryTest {
     }
 
     @Test
-    fun runMorning_keepsTheDayCapturedAtTheStart() = runBlocking {
+    fun runMorning_keepsTheDayCapturedAtTheStart() = runTest {
         val nextDay = sampleDay.plus(1, DateTimeUnit.DAY)
         var calls = 0
         val store = FakeStore(sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")))
@@ -1670,7 +1670,7 @@ class EditionTaskPersistenceTest {
     private val sampleDay = LocalDate(2026, 11, 10)
 
     @Test
-    fun updateMorningEdition_bumpsRevisionAndPersistsTasks() = runBlocking {
+    fun updateMorningEdition_bumpsRevisionAndPersistsTasks() = runTest {
         val morning = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-2026-11-10",
             revision = 3,
@@ -1689,7 +1689,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun updateMorningEdition_rejectsWrongDayOrId() = runBlocking {
+    fun updateMorningEdition_rejectsWrongDayOrId() = runTest {
         val morning = SampleGenerator.forDay(sampleDay).copy(id = "morning-2026-11-10", revision = 1, isSample = false)
         val store = FakeStore(morning = morning)
         val repo = LocalEditionRepository(store, today = { sampleDay })
@@ -1700,7 +1700,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun generate_withKey_storesOneModelBriefingOnANewMorning() = runBlocking {
+    fun generate_withKey_storesOneModelBriefingOnANewMorning() = runTest {
         var calls = 0
         val store = FakeStore(
             sourceList = SourceList(feeds = listOf("https://example.com/rss.xml")),
@@ -1728,7 +1728,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun generate_withKey_replacesASampleWithOneModelBriefing() = runBlocking {
+    fun generate_withKey_replacesASampleWithOneModelBriefing() = runTest {
         var calls = 0
         val store = FakeStore()
         val repo = LocalEditionRepository(
@@ -1754,7 +1754,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun generate_withoutKey_keepsTheExtractiveBriefingAndDoesNotCall() = runBlocking {
+    fun generate_withoutKey_keepsTheExtractiveBriefingAndDoesNotCall() = runTest {
         var calls = 0
         listOf<ReaderSettings?>(null, ReaderSettings(geminiKey = "  ")).forEach { settings ->
             val store = FakeStore(
@@ -1780,7 +1780,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun generate_whenTheCallFailsOrIsBlank_keepsTheExtractiveBriefing() = runBlocking {
+    fun generate_whenTheCallFailsOrIsBlank_keepsTheExtractiveBriefing() = runTest {
         listOf<() -> String>({ error("summarizer_unavailable") }, { "  " }).forEach { result ->
             var calls = 0
             val store = FakeStore(
@@ -1806,7 +1806,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun generate_again_withKey_keepsTheBriefingAndDoesNotCall() = runBlocking {
+    fun generate_again_withKey_keepsTheBriefingAndDoesNotCall() = runTest {
         var calls = 0
         val existing = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
@@ -1836,7 +1836,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun newEditionNow_withKey_storesOneModelBriefingOnTheExtra() = runBlocking {
+    fun newEditionNow_withKey_storesOneModelBriefingOnTheExtra() = runTest {
         var calls = 0
         val morning = SampleGenerator.forDay(sampleDay).copy(
             id = "morning-${sampleDay.toDayKey()}",
@@ -1868,7 +1868,7 @@ class EditionTaskPersistenceTest {
     }
 
     @Test
-    fun sampleRetry_withKey_staysExtractive() = runBlocking {
+    fun sampleRetry_withKey_staysExtractive() = runTest {
         var calls = 0
         val store = FakeStore(settings = ReaderSettings(geminiKey = "configured"))
         val repo = LocalEditionRepository(

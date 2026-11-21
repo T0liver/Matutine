@@ -1,6 +1,6 @@
 package hu.toliver.matutine.edition
 
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -35,7 +35,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun readShowsTheServerEditionAndDoesNotWriteTheLocalStore() = runBlocking {
+    fun readShowsTheServerEditionAndDoesNotWriteTheLocalStore() = runTest {
         val store = MemoryStore()
         val local = LocalFake()
         val transport = ScriptedTransport { method, path ->
@@ -57,7 +57,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun wrongTokenKeepsTheStoredEditionAndTheTokenSentence() = runBlocking {
+    fun wrongTokenKeepsTheStoredEditionAndTheTokenSentence() = runTest {
         val stored = serverEdition.copy(briefing = "Already on the phone.")
         val store = MemoryStore(morning = stored)
         val transport = ScriptedTransport { _, _ -> RemoteHttpResult(401, "unauthorized") }
@@ -72,7 +72,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun offlineOpenShowsTheStoredEditionAndDoesNotUpload() = runBlocking {
+    fun offlineOpenShowsTheStoredEditionAndDoesNotUpload() = runTest {
         val stored = serverEdition.copy(briefing = "Copy on the phone.")
         val store = MemoryStore(morning = stored)
         val local = LocalFake()
@@ -91,7 +91,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun offlineOpenWithNoStoredEditionFailsWithTheSameSentence() = runBlocking {
+    fun offlineOpenWithNoStoredEditionFailsWithTheSameSentence() = runTest {
         val transport = ScriptedTransport { _, _ -> error("offline") }
         val repo = repository(MemoryStore(), LocalFake(), transport)
 
@@ -102,7 +102,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun reachableGenerateAndExtraRunOnTheServer() = runBlocking {
+    fun reachableGenerateAndExtraRunOnTheServer() = runTest {
         val store = MemoryStore()
         val local = LocalFake()
         val transport = ScriptedTransport { method, path ->
@@ -141,7 +141,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun unreachableGenerateWritesLocallyAndDoesNotPostSources() = runBlocking {
+    fun unreachableGenerateWritesLocallyAndDoesNotPostSources() = runTest {
         val local = LocalFake()
         val transport = ScriptedTransport { _, _ -> error("offline") }
         val repo = repository(MemoryStore(), local, transport)
@@ -159,7 +159,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun remoteSettingsStayOnTheDeviceAndTheKeyIsNotSent() = runBlocking {
+    fun remoteSettingsStayOnTheDeviceAndTheKeyIsNotSent() = runTest {
         val local = LocalFake()
         val transport = ScriptedTransport { _, _ -> error("unused") }
         val repo = repository(MemoryStore(), local, transport)
@@ -183,7 +183,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun typewriterSavePutsTheServerEditionAndDoesNotWriteLocally() = runBlocking {
+    fun typewriterSavePutsTheServerEditionAndDoesNotWriteLocally() = runTest {
         val store = MemoryStore()
         val saved = serverEdition.copy(briefing = "Typed on the desktop.", revision = 5)
         val savedExtra = extra.copy(briefing = "Typed extra.", revision = 2)
@@ -215,7 +215,7 @@ class RemoteEditionRepositoryTest {
     }
 
     @Test
-    fun unreachableTypewriterDoesNotWriteLocally() = runBlocking {
+    fun unreachableTypewriterDoesNotWriteLocally() = runTest {
         val store = MemoryStore()
         val transport = ScriptedTransport { _, _ -> error("offline") }
         val repo = repository(store, LocalFake(), transport, writesEditions = true)

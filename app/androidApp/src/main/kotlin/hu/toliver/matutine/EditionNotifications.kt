@@ -46,7 +46,11 @@ fun postEditionReadyNotification(
         .setAutoCancel(true)
         .setStyle(NotificationCompat.BigTextStyle().bigText(notificationText))
         .build()
-    NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    try {
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    } catch (_: SecurityException) {
+        // POST_NOTIFICATIONS can be revoked between notificationsMayPost and this call.
+    }
 }
 
 private fun ensureEditionChannel(context: Context) {
